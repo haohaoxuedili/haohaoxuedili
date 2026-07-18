@@ -108,8 +108,9 @@ jobs:
           ec=${PIPESTATUS[1]}
           echo "BUILD_EXIT_CODE=$ec" >> $GITHUB_ENV
           echo "buildozer exit code: $ec"
+          rm -rf apk-output
           mkdir -p apk-output
-          find . -name "*.apk" -type f -print -exec cp {} apk-output/ \;
+          find bin -maxdepth 2 -name "*.apk" -type f -print -exec cp {} apk-output/ \;
           ls -lh apk-output/*.apk 2>/dev/null || true
           exit 0
 
