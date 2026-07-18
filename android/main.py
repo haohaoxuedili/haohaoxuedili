@@ -15,60 +15,37 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
-from kivy.uix.togglebutton import ToggleButton
 
-# Android 上 Kivy 默认字体不支持中文，注册内置中文字体并通过自定义组件默认使用
-if sys.platform.startswith('linux') and 'ANDROID_ROOT' in os.environ:
-    _bundled_font = os.path.join(os.path.dirname(__file__), 'DroidSansFallback.ttf')
-    if os.path.isfile(_bundled_font):
-        try:
-            LabelBase.register(name='AndroidFallback', fn_regular=_bundled_font)
-        except Exception as _exc:
-            print('font register failed:', _exc)
-
-
-class ZhLabel(Label):
-    def __init__(self, **kwargs):
-        kwargs.setdefault('font_name', 'AndroidFallback')
-        super().__init__(**kwargs)
-
-
-class ZhButton(Button):
-    def __init__(self, **kwargs):
-        kwargs.setdefault('font_name', 'AndroidFallback')
-        super().__init__(**kwargs)
-
-
-class ZhTextInput(TextInput):
-    def __init__(self, **kwargs):
-        kwargs.setdefault('font_name', 'AndroidFallback')
-        super().__init__(**kwargs)
-
-
-class ZhToggleButton(ToggleButton):
-    def __init__(self, **kwargs):
-        kwargs.setdefault('font_name', 'AndroidFallback')
-        super().__init__(**kwargs)
+# Android 上 Kivy 默认字体不支持中文，注册内置中文字体
+_BUNDLED_FONT = os.path.join(os.path.dirname(__file__), 'DroidSansFallback.ttf')
+if os.path.isfile(_BUNDLED_FONT):
+    try:
+        LabelBase.register(name='AndroidFallback', fn_regular=_BUNDLED_FONT)
+    except Exception as _exc:
+        print('font register failed:', _exc)
 
 
 KV = """
 #:kivy 2.2.0
+#:set ZH_FONT 'AndroidFallback'
 
 <RootWidget>:
     orientation: 'vertical'
     padding: dp(16)
     spacing: dp(12)
 
-    ZhLabel:
+    Label:
         text: 'NCM 转 MP3 / FLAC'
+        font_name: ZH_FONT
         font_size: dp(24)
         bold: True
         size_hint_y: None
         height: dp(52)
 
-    ZhLabel:
+    Label:
         id: ffmpeg_lbl
         text: '正在检测核心模块...'
+        font_name: ZH_FONT
         font_size: dp(14)
         size_hint_y: None
         height: dp(28)
@@ -80,8 +57,9 @@ KV = """
         size_hint_y: None
         height: dp(124)
         spacing: dp(8)
-        ZhLabel:
+        Label:
             text: '输出格式'
+            font_name: ZH_FONT
             font_size: dp(14)
             size_hint_y: None
             height: dp(24)
@@ -89,23 +67,27 @@ KV = """
             text_size: self.size
         BoxLayout:
             spacing: dp(8)
-            ZhToggleButton:
+            ToggleButton:
                 id: fmt_auto
                 text: '自动'
+                font_name: ZH_FONT
                 group: 'fmt'
                 state: 'down'
-            ZhToggleButton:
+            ToggleButton:
                 id: fmt_flac
                 text: 'FLAC'
+                font_name: ZH_FONT
                 group: 'fmt'
-            ZhToggleButton:
+            ToggleButton:
                 id: fmt_mp3
                 text: 'MP3'
+                font_name: ZH_FONT
                 group: 'fmt'
 
-    ZhTextInput:
+    TextInput:
         id: path_input
         hint_text: '输入或粘贴 .ncm 文件路径，或文件夹路径'
+        font_name: ZH_FONT
         multiline: False
         size_hint_y: None
         height: dp(48)
@@ -114,11 +96,13 @@ KV = """
         size_hint_y: None
         height: dp(52)
         spacing: dp(8)
-        ZhButton:
+        Button:
             text: '添加路径'
+            font_name: ZH_FONT
             on_press: root.add_input_path()
-        ZhButton:
+        Button:
             text: '扫描下载目录'
+            font_name: ZH_FONT
             on_press: root.scan_downloads()
 
     ScrollView:
@@ -136,9 +120,10 @@ KV = """
         max: 100
         value: 0
 
-    ZhButton:
+    Button:
         id: start_btn
         text: '开始转换'
+        font_name: ZH_FONT
         size_hint_y: None
         height: dp(54)
         disabled: True
@@ -147,16 +132,18 @@ KV = """
 <StatusItem>:
     size_hint_y: None
     height: dp(42)
-    ZhLabel:
+    Label:
         id: filename
         text: ''
+        font_name: ZH_FONT
         font_size: dp(12)
         halign: 'left'
         valign: 'middle'
         text_size: self.size
-    ZhLabel:
+    Label:
         id: status_text
         text: '等待中'
+        font_name: ZH_FONT
         font_size: dp(12)
         size_hint_x: 0.35
         halign: 'right'
@@ -272,7 +259,7 @@ class RootWidget(BoxLayout):
         self.ids.start_btn.text = '重新开始'
 
     def _toast(self, msg):
-        popup = Popup(title='提示', content=ZhLabel(text=msg), size_hint=(0.78, 0.22))
+        popup = Popup(title='提示', content=Label(text=msg, font_name='AndroidFallback'), size_hint=(0.78, 0.22))
         popup.open()
         Clock.schedule_once(lambda _dt: popup.dismiss(), 2)
 
