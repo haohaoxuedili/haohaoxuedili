@@ -16,7 +16,7 @@ source.dir = .
 source.include_exts = py,png,jpg
 
 # (str) Application versionning (method 1)
-version = 1.0.1
+version = 1.0.2
 
 # (str) Application icon
 icon.filename = app.png
