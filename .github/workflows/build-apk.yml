@@ -23,80 +23,64 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK (with all licenses auto-accepted)
+        uses: android-actions/setup-android@v3
+        with:
+          # 装满足 buildozer 1.5 期望的组件 (build-tools 由 buildozer 自管但要 license 接受了)
+          packages: |
+            platforms;android-33
+            build-tools;33.0.2
+            platform-tools
+          accept-android-sdk-licenses: true
+
       - name: Install buildozer dependencies
         run: |
           sudo apt update
-          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip python3-virtualenv \
+          sudo apt install -y git zip unzip python3-pip python3-virtualenv \
             autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
             cmake libffi-dev libssl-dev automake autopoint gettext build-essential ccache
           # 固定 buildozer / p4a / Cython 版本以保证可重复构建
           pip3 install --upgrade "buildozer==1.5.0" "Cython==3.0.11" "virtualenv" "sh==2.0.7"
           buildozer version
 
-      - name: Pre-install Android SDK cmdline-tools and accept all licenses
+      - name: Link android-actions SDK to buildozer's expected location
         shell: bash
         run: |
-          # 不用 set -e, 每步独立判断, 让失败点能展示
-          echo "[1/8] 创建 SDK 目录"
-          SDK_ROOT="$HOME/.buildozer/android_sdk"
-          mkdir -p "$SDK_ROOT/cmdline-tools" || { echo "mkdir 失败"; exit 1; }
-          echo "  SDK_ROOT = $SDK_ROOT"
-          ls -la "$HOME/.buildozer" || true
-
-          echo "[2/8] 下载 cmdline-tools 11.0"
-          cd "$SDK_ROOT/cmdline-tools"
-          if ! wget -v -O cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"; then
-            echo "wget 失败"
+          # android-actions 把 SDK 装到 $ANDROID_SDK_ROOT, 默认是 /usr/local/lib/android/sdk
+          # buildozer 期望在 $HOME/.buildozer/android_sdk, 这里做软链接避免重复下载
+          BUILD_SDK="$HOME/.buildozer/android_sdk"
+          REAL_SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          mkdir -p "$HOME/.buildozer"
+          if [ -d "$REAL_SDK" ]; then
+            echo "SDK 真实位置: $REAL_SDK"
+            ls -la "$REAL_SDK" | head -10
+            # 不覆盖已存在的
+            if [ ! -e "$BUILD_SDK" ]; then
+              ln -s "$REAL_SDK" "$BUILD_SDK"
+              echo "已建立软链接 $BUILD_SDK -> $REAL_SDK"
+            fi
+            ls -la "$BUILD_SDK"
+          else
+            echo "找不到 SDK at $REAL_SDK"
             exit 1
           fi
-          ls -la cmdline-tools.zip
 
-          echo "[3/8] 解压"
-          if ! unzip -o cmdline-tools.zip; then
-            echo "unzip 失败"
-            exit 1
-          fi
-          ls -la
-
-          echo "[4/8] 重命名为 latest"
-          if [ -d cmdline-tools ]; then
-            mv cmdline-tools latest
-          fi
-          ls -la latest/bin/ | head -5
-
-          echo "[5/8] 清理 zip"
-          rm -f cmdline-tools.zip
-
-          echo "[6/8] 设置环境变量"
-          export ANDROID_SDK_ROOT="$SDK_ROOT"
-          export ANDROID_HOME="$SDK_ROOT"
-          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-          echo "  PATH 前缀: $SDK_ROOT/cmdline-tools/latest/bin"
-          which sdkmanager
-          sdkmanager --version || echo "sdkmanager --version 失败"
-
-          echo "[7/8] 预接受所有 SDK 许可"
-          yes | sdkmanager --licenses 2>&1 | tail -30
-
-          echo "[8/8] 装必要组件"
-          sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "platform-tools" 2>&1 | tail -10
-
-          echo "--- 完成. licenses 目录 ---"
-          ls -la "$SDK_ROOT/licenses" || true
-          echo "--- SDK 子目录 ---"
-          ls -la "$SDK_ROOT"
-
-      - name: Cache Android SDK / NDK / p4a
+      - name: Cache Android NDK / p4a
         uses: actions/cache@v4
         with:
           path: |
-            ~/.buildozer/android_sdk
             ~/.buildozer/android_ndk
             ~/.buildozer/android_packages
             ~/.buildozer/global_packages
             android/.buildozer
-          key: android-sdk-25b-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
-          restore-keys: android-sdk-25b-${{ runner.os }}-
+          key: android-ndk-25b-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
+          restore-keys: android-ndk-25b-${{ runner.os }}-
 
       - name: Sync core module
         run: |
@@ -110,8 +94,12 @@ jobs:
           echo "--- 工作目录 ---"
           pwd
           ls -la
-          echo "--- buildozer distcheck ---"
-          buildozer android clean || true
+          echo "--- env ---"
+          env | grep -i android || true
+          echo "--- SDK 查找测试 ---"
+          test -d "$HOME/.buildozer/android_sdk/cmdline-tools/latest/bin" && echo "cmdline-tools OK"
+          test -d "$HOME/.buildozer/android_sdk/build-tools" && echo "build-tools OK"
+          ls -la "$HOME/.buildozer/android_sdk/licenses" || echo "无 licenses 目录"
 
       - name: Build debug APK
         id: build
@@ -119,11 +107,10 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          # 不使用 pipefail
           set +e
           export ANDROID_HOME="$HOME/.buildozer/android_sdk"
           export ANDROID_SDK_ROOT="$HOME/.buildozer/android_sdk"
-          # 用 yes 持续喂 y 给 buildozer 调 sdkmanager 时弹的 license prompt
+          # buildozer 调 sdkmanager 时弹 license prompt 已预接受, 但仍补 yes 兜底
           yes | buildozer -v android debug 2>&1 | tee buildozer.log
           ec=${PIPESTATUS[0]}
           echo "BUILD_EXIT_CODE=$ec" >> $GITHUB_ENV
@@ -135,10 +122,8 @@ jobs:
         working-directory: android
         shell: bash
         run: |
-          echo "=============== buildozer.log 内容 (前100行) ==============="
-          head -n 100 buildozer.log || echo "(无日志文件)"
-          echo "=============== buildozer.log 内容 (末尾100行) ==============="
-          tail -n 100 buildozer.log || echo "(无日志文件)"
+          echo "=============== buildozer.log (末尾80行) ==============="
+          tail -n 80 buildozer.log || echo "(无日志文件)"
           echo "=============== 结束 ==============="
 
       - name: Show build result
