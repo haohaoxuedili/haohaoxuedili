@@ -126,8 +126,11 @@ jobs:
         shell: bash
         run: |
           echo "BUILD_EXIT_CODE=${BUILD_EXIT_CODE}"
-          if ls android/*.apk android/bin/*.apk >/dev/null 2>&1; then
-            echo "BUILD OK: APK found"
+          APK_PATH=$(find android/.buildozer -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
+          if [ -n "$APK_PATH" ]; then
+            echo "BUILD OK: APK found at $APK_PATH"
+          elif ls android/*.apk android/bin/*.apk >/dev/null 2>&1; then
+            echo "BUILD OK: APK found in android root/bin"
           else
             echo "BUILD FAILED: no APK found, exit_code=${BUILD_EXIT_CODE}"
             exit 1
@@ -141,6 +144,7 @@ jobs:
           path: |
             android/*.apk
             android/bin/*.apk
+            android/.buildozer/**/build/outputs/apk/**/*.apk
           retention-days: 30
           if-no-files-found: ignore
 
