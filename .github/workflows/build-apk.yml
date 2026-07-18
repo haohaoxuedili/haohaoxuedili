@@ -1,107 +1,75 @@
 name: Build Android APK
 
-# 触发条件: 手动触发 或 推送到主分支 / 打 tag
+# 触发条件: 手动触发 或 推送到主分支
 on:
-  workflow_dispatch:     # GitHub 网页上手动点 "Run workflow"
+  workflow_dispatch:
   push:
     branches: [main, master]
     paths:
       - 'android/**'
       - '.github/workflows/build-apk.yml'
-    tags: ['v*']
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 120
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install buildozer dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool \
-            pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 \
-            cmake libffi-dev libssl-dev build-essential ccache
-          pip3 install --upgrade buildozer Cython==0.29.36 virtualenv
-          # 排查用: 报告版本, 验证已安装
-          buildozer version
-          python3 -c "import Cython; print('Cython', Cython.__version__)"
-
-      - name: Cache Android SDK / NDK
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.buildozer/android_sdk
-            ~/.buildozer/android_ndk
-            ~/.buildozer/global_packages
-            android/.buildozer
-          key: android-sdk-25b-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
-          restore-keys: android-sdk-25b-${{ runner.os }}-
-
       - name: Sync core module
         # 确保根目录的最新 ncm2mp3.py 拷到 android/ 子目录
         run: |
           cp ncm2mp3.py android/ncm2mp3.py
 
-      - name: Pre-check buildozer spec
-        working-directory: android
-        run: |
-          # 显示 buildozer 解析 spec 内容, 帮助排查问题
-          buildozer --version || true
-          echo "---"
-          echo "buildozer.spec 内容:"
-          cat buildozer.spec
-          echo "---"
-          # 用 buildozer 的 distcheck / specdump 让它读一遍
-          buildozer android clean 2>&1 | head -40 || true
-          echo "---"
-          echo "PWD: $PWD"
-          ls -la
-
       - name: Build debug APK
         id: build
-        working-directory: android
+        uses: ArtemSBulgakov/buildozer-action@v1
+        with:
+          command: android debug
+          workdir: android
+          repository_root: .
         continue-on-error: true
-        run: |
-          # 把全部 stdout+stderr 写到日志文件, 即便失败也能上传
-          set -o pipefail
-          buildozer -v android debug 2>&1 | tee buildozer.log
-          echo "BUILD_EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
 
       - name: Dump buildozer log (visible in Actions web UI)
-        if: always() && steps.build.outcome != 'success'
+        if: always()
         working-directory: android
         run: |
-          echo "=========== buildozer.log BEGIN ==========="
-          cat buildozer.log
-          echo "=========== buildozer.log END ==========="
+          # buildozer-action 会把日志输出到 stderr, 这里我们读 buildozer 自动产生的日志
+          for f in buildozer.log .buildozer/buildozer.log; do
+            if [ -f "$f" ]; then
+              echo "=========== $f BEGIN ==========="
+              cat "$f"
+              echo "=========== $f END ==========="
+            fi
+          done
 
       - name: Show build result
         run: |
-          echo "BUILD_EXIT_CODE=${BUILD_EXIT_CODE}"
-          test "${BUILD_EXIT_CODE}" = "0"
-
-      - name: Upload buildozer log on failure
-        if: always() && steps.build.outcome != 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: buildozer-log
-          path: android/buildozer.log
-          retention-days: 7
+          if [ "${{ steps.build.outcome }}" = "success" ]; then
+            echo "BUILD OK"
+          else
+            echo "BUILD FAILED, outcome=${{ steps.build.outcome }}"
+            exit 1
+          fi
 
       - name: Upload APK artifact
-        if: always() && steps.build.outcome == 'success'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ncm2mp3-apk
           path: android/bin/*.apk
           retention-days: 30
-          if-no-files-found: error
+
+      - name: Upload buildozer log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-log
+          path: |
+            android/buildozer.log
+            android/.buildozer/**/*.log
+            android/.buildozer/buildozer.log
+          retention-days: 7
+          if-no-files-found: ignore
