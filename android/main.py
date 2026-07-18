@@ -5,25 +5,33 @@ import sys
 from pathlib import Path
 from threading import Thread
 
-# Android 上 Kivy 默认字体不支持中文，必须在导入其他 Kivy 模块前设置默认字体
+from kivy.app import App
+from kivy.clock import Clock
+from kivy.core.text import LabelBase
+from kivy.core.window import Window
+from kivy.lang import Builder
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.label import Label
+from kivy.uix.popup import Popup
+from kivy.uix.textinput import TextInput
+
+# Android 上 Kivy 默认字体不支持中文，注册系统字体并设为默认
 if sys.platform.startswith('linux') and 'ANDROID_ROOT' in os.environ:
-    from kivy.config import Config
     _ANDROID_FONTS = [
         '/system/fonts/DroidSansFallback.ttf',
         '/system/fonts/NotoSansCJK-Regular.ttc',
     ]
     for _font_path in _ANDROID_FONTS:
         if os.path.isfile(_font_path):
-            Config.set('kivy', 'default_font', ['AndroidFallback', _font_path])
+            try:
+                LabelBase.register(name='AndroidFallback', fn_regular=_font_path)
+                Label.font_name = 'AndroidFallback'
+                Button.font_name = 'AndroidFallback'
+                TextInput.font_name = 'AndroidFallback'
+            except Exception as _exc:
+                print('font register failed:', _exc)
             break
-
-from kivy.app import App
-from kivy.clock import Clock
-from kivy.core.window import Window
-from kivy.lang import Builder
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.label import Label
-from kivy.uix.popup import Popup
 
 KV = """
 #:kivy 2.2.0
