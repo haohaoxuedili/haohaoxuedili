@@ -1,0 +1,4 @@
+PyQt5>=5.15.0
+pycryptodome>=3.19.0
+mutagen>=1.47.0
+numpy>=1.20.0

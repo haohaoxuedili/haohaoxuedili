@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+
+# Buildozer / Buildozer Android 产物
+android/.buildozer/
+android/build/
+android/bin/
+android/.gradle/
+buildozer.spec.bak
+
+# PyInstaller 产物
+build/
+dist/
+*.spec.bak
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# 输出目录
+NCM2MP3_Output/
+output/
+
+# 测试
+test_ncm.py
+*.ncm
+!android/**/*.py
+
+# 大二进制
+bundled/ffmpeg.exe
+bundled/ffmpeg
+*.apk
+*.abb
+
+# 安装器中间产物
+installer/Output/
+installer/build/

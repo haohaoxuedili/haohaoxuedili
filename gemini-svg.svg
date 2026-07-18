@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- 主体渐变配色 -->
+    <linearGradient id="mainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00C6FF" />
+      <stop offset="100%" stop-color="#0072FF" />
+    </linearGradient>
+    
+    <!-- 次要渐变配色 -->
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7F00FF" />
+      <stop offset="100%" stop-color="#E100FF" />
+    </linearGradient>
+  </defs>
+
+  <!-- 转换箭头形状 -->
+  <g transform="translate(0, 0)">
+    <!-- 顺时针环形箭头 1 -->
+    <path d="M 256,70 A 180,180 0 0,1 430,220" 
+          fill="none" 
+          stroke="url(#mainGrad)" 
+          stroke-width="36" 
+          stroke-linecap="round" />
+    <polygon points="430,170 465,245 385,245" fill="url(#mainGrad)" />
+
+    <!-- 逆时针环形箭头 2 -->
+    <path d="M 256,442 A 180,180 0 0,1 82,292" 
+          fill="none" 
+          stroke="url(#accentGrad)" 
+          stroke-width="36" 
+          stroke-linecap="round" />
+    <polygon points="82,342 47,267 127,267" fill="url(#accentGrad)" />
+  </g>
+
+  <!-- 中心音频声波图形 -->
+  <g fill="url(#mainGrad)">
+    <rect x="180" y="216" width="16" height="80" rx="8" />
+    <rect x="210" y="176" width="16" height="160" rx="8" />
+    <rect x="240" y="136" width="16" height="240" rx="8" />
+    <rect x="270" y="166" width="16" height="180" rx="8" />
+    <rect x="300" y="196" width="16" height="120" rx="8" />
+    <rect x="330" y="226" width="16" height="60" rx="8" />
+  </g>
+</svg>
