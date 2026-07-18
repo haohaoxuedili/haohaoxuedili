@@ -1,66 +1,61 @@
 [app]
-# 应用名称 (显示在 Android 桌面图标下)
+
+# (str) Title of the application
 title = NCM 转 MP3 / FLAC
 
-# 包名 (反域名格式)
+# (str) Package name
 package.name = ncm2mp3
+
+# (str) Package domain (needed for android/ios packaging)
 package.domain = io.github.idoknow
 
-# 源码目录 (Buildozer 默认在 spec 同目录的 main.py)
+# (str) Source code directory
 source.dir = .
+
+# (list) Source files to include (let empty to include all the files)
 source.include_exts = py,png,jpg
 
-# 版本号
+# (str) Application versionning (method 1)
 version = 1.0.0
 
-# 应用需求配置
-# - python3, kivy: 框架
-# - pycryptodome: AES 解密 NCM 元数据和 key 段
-# - mutagen: 写入音频元数据 (标题/歌手/专辑/封面)
-# - numpy: 大音频流异或解密的 C 层加速
+# (list) Application requirements
+# python3, kivy: framework
+# pycryptodome: AES decrypt of ncm metadata/key
+# mutagen: write audio metadata
+# numpy: speed up large audio stream XOR
 requirements = python3,kivy,pycryptodome,mutagen,numpy
 
-# Android 配置
+# (list) Application permissions
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
-android.api = 33              # 目标 Android 13 (API 33)
-android.minapi = 24           # 最低 Android 7.0 (API 24)
-android.sdk = 33
-android.ndk = 25b
-android.arch = arm64-v8a,armeabi-v7a
 
-# 横竖屏
+# (int) Target Android API
+android.api = 33
+
+# (int) Minimum API required
+android.minapi = 24
+
+# (int) Android SDK version to use
+android.sdk = 33
+
+# (str) Android NDK version to use
+android.ndk = 25b
+
+# (list) Architectures of Android APKs to build
+android.archs = arm64-v8a, armeabi-v7a
+
+# (str) Orientation of app
 orientation = portrait
 
-# 是否全屏
+# (bool) Full screen mode
 fullscreen = 0
 
-# 应用图标 (PNG 格式, 推荐 512x512)
-# android.icon = icon.png
-
-# 应用名
-android.app_name = NCM 转 MP3
-
-# 允许备份
-android.allow_backup = 1
-
-# 主程序入口
-android.entrypoint = main.py
-
-# 包含额外 Python 文件 (核心解密模块)
-source.include_patterns = ncm2mp3.py,main.py,*.py
-
-# 编译时清空之前构建
-# (命令行加 --clean 即可, 不必固定写)
-
 [buildozer]
-# Buildozer 输出目录
-build_dir = ./build
-bin_dir = ./bin
 
-# 日志等级
+# (int) Log level, 0 = error only, 1 = info, 2 = debug (more verbose)
 log_level = 2
 
-# 接受 p4a / SDK 许可证
-android.accept_sdk_license = true
+# (str) Error output level
+warn_on_skip = 1
 
-warn_on_skip = true
+# (bool) Accept SDK license automatically
+android.accept_sdk_license = True

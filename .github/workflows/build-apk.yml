@@ -51,6 +51,21 @@ jobs:
         run: |
           cp ncm2mp3.py android/ncm2mp3.py
 
+      - name: Pre-check buildozer spec
+        working-directory: android
+        run: |
+          # 显示 buildozer 解析 spec 内容, 帮助排查问题
+          buildozer --version || true
+          echo "---"
+          echo "buildozer.spec 内容:"
+          cat buildozer.spec
+          echo "---"
+          # 用 buildozer 的 distcheck / specdump 让它读一遍
+          buildozer android clean 2>&1 | head -40 || true
+          echo "---"
+          echo "PWD: $PWD"
+          ls -la
+
       - name: Build debug APK
         id: build
         working-directory: android
