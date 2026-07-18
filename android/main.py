@@ -10,23 +10,39 @@ from kivy.clock import Clock
 from kivy.core.text import LabelBase
 from kivy.core.window import Window
 from kivy.lang import Builder
+from kivy.properties import StringProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
+from kivy.uix.togglebutton import ToggleButton
 
-# Android 上 Kivy 默认字体不支持中文，使用内置中文字体
+# Android 上 Kivy 默认字体不支持中文，注册内置中文字体并通过自定义组件默认使用
 if sys.platform.startswith('linux') and 'ANDROID_ROOT' in os.environ:
     _bundled_font = os.path.join(os.path.dirname(__file__), 'DroidSansFallback.ttf')
     if os.path.isfile(_bundled_font):
         try:
             LabelBase.register(name='AndroidFallback', fn_regular=_bundled_font)
-            Label.font_name = 'AndroidFallback'
-            Button.font_name = 'AndroidFallback'
-            TextInput.font_name = 'AndroidFallback'
         except Exception as _exc:
             print('font register failed:', _exc)
+
+
+class ZhLabel(Label):
+    font_name = StringProperty('AndroidFallback')
+
+
+class ZhButton(Button):
+    font_name = StringProperty('AndroidFallback')
+
+
+class ZhTextInput(TextInput):
+    font_name = StringProperty('AndroidFallback')
+
+
+class ZhToggleButton(ToggleButton):
+    font_name = StringProperty('AndroidFallback')
+
 
 KV = """
 #:kivy 2.2.0
@@ -36,14 +52,14 @@ KV = """
     padding: dp(16)
     spacing: dp(12)
 
-    Label:
+    ZhLabel:
         text: 'NCM 转 MP3 / FLAC'
         font_size: dp(24)
         bold: True
         size_hint_y: None
         height: dp(52)
 
-    Label:
+    ZhLabel:
         id: ffmpeg_lbl
         text: '正在检测核心模块...'
         font_size: dp(14)
@@ -57,7 +73,7 @@ KV = """
         size_hint_y: None
         height: dp(124)
         spacing: dp(8)
-        Label:
+        ZhLabel:
             text: '输出格式'
             font_size: dp(14)
             size_hint_y: None
@@ -66,21 +82,21 @@ KV = """
             text_size: self.size
         BoxLayout:
             spacing: dp(8)
-            ToggleButton:
+            ZhToggleButton:
                 id: fmt_auto
                 text: '自动'
                 group: 'fmt'
                 state: 'down'
-            ToggleButton:
+            ZhToggleButton:
                 id: fmt_flac
                 text: 'FLAC'
                 group: 'fmt'
-            ToggleButton:
+            ZhToggleButton:
                 id: fmt_mp3
                 text: 'MP3'
                 group: 'fmt'
 
-    TextInput:
+    ZhTextInput:
         id: path_input
         hint_text: '输入或粘贴 .ncm 文件路径，或文件夹路径'
         multiline: False
@@ -91,10 +107,10 @@ KV = """
         size_hint_y: None
         height: dp(52)
         spacing: dp(8)
-        Button:
+        ZhButton:
             text: '添加路径'
             on_press: root.add_input_path()
-        Button:
+        ZhButton:
             text: '扫描下载目录'
             on_press: root.scan_downloads()
 
@@ -113,7 +129,7 @@ KV = """
         max: 100
         value: 0
 
-    Button:
+    ZhButton:
         id: start_btn
         text: '开始转换'
         size_hint_y: None
@@ -124,14 +140,14 @@ KV = """
 <StatusItem>:
     size_hint_y: None
     height: dp(42)
-    Label:
+    ZhLabel:
         id: filename
         text: ''
         font_size: dp(12)
         halign: 'left'
         valign: 'middle'
         text_size: self.size
-    Label:
+    ZhLabel:
         id: status_text
         text: '等待中'
         font_size: dp(12)
@@ -139,6 +155,10 @@ KV = """
         halign: 'right'
         text_size: self.size
 """
+
+
+class StatusItem(BoxLayout):
+    pass
 
 
 class RootWidget(BoxLayout):
@@ -245,7 +265,7 @@ class RootWidget(BoxLayout):
         self.ids.start_btn.text = '重新开始'
 
     def _toast(self, msg):
-        popup = Popup(title='提示', content=Label(text=msg), size_hint=(0.78, 0.22))
+        popup = Popup(title='提示', content=ZhLabel(text=msg), size_hint=(0.78, 0.22))
         popup.open()
         Clock.schedule_once(lambda _dt: popup.dismiss(), 2)
 
