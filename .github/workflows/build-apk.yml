@@ -31,13 +31,6 @@ jobs:
 
       - name: Setup Android SDK (with all licenses auto-accepted)
         uses: android-actions/setup-android@v3
-        with:
-          # 装满足 buildozer 1.5 期望的组件 (build-tools 由 buildozer 自管但要 license 接受了)
-          packages: |
-            platforms;android-33
-            build-tools;33.0.2
-            platform-tools
-          accept-android-sdk-licenses: true
 
       - name: Install buildozer dependencies
         run: |
