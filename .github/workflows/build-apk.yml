@@ -75,6 +75,10 @@ jobs:
           key: android-ndk-25b-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
           restore-keys: android-ndk-25b-${{ runner.os }}-
 
+      - name: Prepare Android icon
+        run: |
+          python make_icon.py
+
       - name: Sync core module
         run: |
           cp ncm2mp3.py android/ncm2mp3.py
@@ -103,11 +107,12 @@ jobs:
           set +e
           export ANDROID_HOME="$HOME/.buildozer/android_sdk"
           export ANDROID_SDK_ROOT="$HOME/.buildozer/android_sdk"
-          # buildozer 调 sdkmanager 时弹 license prompt 已预接受, 但仍补 yes 兜底
+          # Keep feeding 'y' for any sdkmanager license prompt buildozer may spawn.
           yes | buildozer -v android debug 2>&1 | tee buildozer.log
-          ec=${PIPESTATUS[0]}
+          ec=${PIPESTATUS[1]}
           echo "BUILD_EXIT_CODE=$ec" >> $GITHUB_ENV
           echo "buildozer 退出码: $ec"
+          ls -lh ./*.apk bin/*.apk 2>/dev/null || true
           exit 0
 
       - name: Dump buildozer log tail (visible in Actions web UI)
@@ -125,10 +130,10 @@ jobs:
         shell: bash
         run: |
           echo "BUILD_EXIT_CODE=${BUILD_EXIT_CODE}"
-          if [ "${BUILD_EXIT_CODE}" = "0" ]; then
-            echo "BUILD OK"
+          if ls android/*.apk android/bin/*.apk >/dev/null 2>&1; then
+            echo "BUILD OK: APK found"
           else
-            echo "BUILD FAILED, exit_code=${BUILD_EXIT_CODE}"
+            echo "BUILD FAILED: no APK found, exit_code=${BUILD_EXIT_CODE}"
             exit 1
           fi
 
@@ -137,7 +142,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ncm2mp3-apk
-          path: android/bin/*.apk
+          path: |
+            android/*.apk
+            android/bin/*.apk
           retention-days: 30
           if-no-files-found: ignore
 

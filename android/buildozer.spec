@@ -16,7 +16,10 @@ source.dir = .
 source.include_exts = py,png,jpg
 
 # (str) Application versionning (method 1)
-version = 1.0.0
+version = 1.0.1
+
+# (str) Application icon
+icon.filename = app.png
 
 # (list) Application requirements
 # python3, kivy: framework

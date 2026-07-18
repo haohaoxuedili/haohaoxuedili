@@ -373,7 +373,9 @@ class StatusItem(BoxLayout):
 class NcmApp(App):
     def build(self):
         Window.clearcolor = (0.96, 0.97, 0.98, 1)
-        return Builder.load_string(KV)
+        self.icon = 'app.png'
+        Builder.load_string(KV)
+        return RootWidget()
 
 
 if __name__ == '__main__':
