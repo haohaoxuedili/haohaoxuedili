@@ -31,6 +31,9 @@ jobs:
             pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 \
             cmake libffi-dev libssl-dev build-essential ccache
           pip3 install --upgrade buildozer Cython==0.29.36 virtualenv
+          # 排查用: 报告版本, 验证已安装
+          buildozer version
+          python3 -c "import Cython; print('Cython', Cython.__version__)"
 
       - name: Cache Android SDK / NDK
         uses: actions/cache@v4
@@ -49,11 +52,30 @@ jobs:
           cp ncm2mp3.py android/ncm2mp3.py
 
       - name: Build debug APK
+        id: build
         working-directory: android
+        continue-on-error: true
         run: |
-          buildozer -v android debug
+          # 把全部 stdout+stderr 写到日志文件, 即便失败也能上传
+          set -o pipefail
+          buildozer -v android debug 2>&1 | tee buildozer.log
+          echo "BUILD_EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
+
+      - name: Show build result
+        run: |
+          echo "BUILD_EXIT_CODE=${BUILD_EXIT_CODE}"
+          test "${BUILD_EXIT_CODE}" = "0"
+
+      - name: Upload buildozer log on failure
+        if: always() && steps.build.outcome != 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-log
+          path: android/buildozer.log
+          retention-days: 7
 
       - name: Upload APK artifact
+        if: always() && steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ncm2mp3-apk
