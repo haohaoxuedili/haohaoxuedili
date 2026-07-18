@@ -47,12 +47,19 @@ jobs:
           mv cmdline-tools latest
           rm cmdline-tools.zip
           export ANDROID_SDK_ROOT="$SDK_ROOT"
+          export ANDROID_HOME="$SDK_ROOT"
           export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           echo "预接受所有 SDK 许可..."
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "platform-tools" > /dev/null 2>&1 || true
-          echo "SDK 准备完成"
-          ls -la "$SDK_ROOT" || true
+          yes | sdkmanager --licenses > /tmp/licenses.log 2>&1 || true
+          echo "--- license 接受结果 ---"
+          tail -n 20 /tmp/licenses.log
+          # 写入 licenses 目录确认
+          echo "--- licenses 目录 ---"
+          ls -la "$SDK_ROOT/licenses" || echo "(无 licenses 目录, 失败)"
+          # 装满足 buildozer 1.5 默认 build-tools 版本 33.0.2
+          sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "platform-tools"
+          echo "--- SDK 目录结构(前3层) ---"
+          find "$SDK_ROOT" -maxdepth 3 -type d
 
       - name: Cache Android SDK / NDK / p4a
         uses: actions/cache@v4
@@ -87,13 +94,15 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          # 不使用 pipefail (tee 会输送真实退出码)
+          # 不使用 pipefail
           set +e
-          buildozer -v android debug 2>&1 | tee buildozer.log
+          export ANDROID_HOME="$HOME/.buildozer/android_sdk"
+          export ANDROID_SDK_ROOT="$HOME/.buildozer/android_sdk"
+          # 用 yes 持续喂 y 给 buildozer 调 sdkmanager 时弹的 license prompt
+          yes | buildozer -v android debug 2>&1 | tee buildozer.log
           ec=${PIPESTATUS[0]}
           echo "BUILD_EXIT_CODE=$ec" >> $GITHUB_ENV
           echo "buildozer 退出码: $ec"
-          # 即使失败也继续, 让 Dump 步骤能跑
           exit 0
 
       - name: Dump buildozer log tail (visible in Actions web UI)
