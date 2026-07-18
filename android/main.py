@@ -1,8 +1,21 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
 from pathlib import Path
 from threading import Thread
+
+# Android 上 Kivy 默认字体不支持中文，必须在导入其他 Kivy 模块前设置默认字体
+if sys.platform.startswith('linux') and 'ANDROID_ROOT' in os.environ:
+    from kivy.config import Config
+    _ANDROID_FONTS = [
+        '/system/fonts/DroidSansFallback.ttf',
+        '/system/fonts/NotoSansCJK-Regular.ttc',
+    ]
+    for _font_path in _ANDROID_FONTS:
+        if os.path.isfile(_font_path):
+            Config.set('kivy', 'default_font', ['AndroidFallback', _font_path])
+            break
 
 from kivy.app import App
 from kivy.clock import Clock
