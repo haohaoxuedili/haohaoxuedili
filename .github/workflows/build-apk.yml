@@ -64,16 +64,33 @@ jobs:
             exit 1
           fi
 
-      - name: Cache Android NDK / p4a
+      - name: Install Android API 33 platform
+        shell: bash
+        run: |
+          export ANDROID_HOME="$HOME/.buildozer/android_sdk"
+          export ANDROID_SDK_ROOT="$HOME/.buildozer/android_sdk"
+          CMDTOOLS="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin"
+          if [ ! -d "$CMDTOOLS" ]; then
+            CMDTOOLS="$ANDROID_SDK_ROOT/cmdline-tools/16.0/bin"
+          fi
+          echo "sdkmanager: $CMDTOOLS/sdkmanager"
+          yes | "$CMDTOOLS/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$CMDTOOLS/sdkmanager" "platforms;android-33" "build-tools;33.0.2" "platform-tools"
+
+      - name: Cache Android SDK / NDK / p4a / build outputs
         uses: actions/cache@v4
         with:
           path: |
             ~/.buildozer/android_ndk
             ~/.buildozer/android_packages
             ~/.buildozer/global_packages
+            ~/.buildozer/android/platform
             android/.buildozer
-          key: android-ndk-25b-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
-          restore-keys: android-ndk-25b-${{ runner.os }}-
+            android/bin
+          key: android-build-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}-${{ hashFiles('.github/workflows/build-apk.yml') }}
+          restore-keys: |
+            android-build-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}-
+            android-build-${{ runner.os }}-
 
       - name: Sync core module
         run: |
