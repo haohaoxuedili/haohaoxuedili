@@ -75,10 +75,6 @@ jobs:
           key: android-ndk-25b-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
           restore-keys: android-ndk-25b-${{ runner.os }}-
 
-      - name: Prepare Android icon
-        run: |
-          python make_icon.py
-
       - name: Sync core module
         run: |
           cp ncm2mp3.py android/ncm2mp3.py
