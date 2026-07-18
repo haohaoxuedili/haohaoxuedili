@@ -117,6 +117,8 @@ jobs:
         run: |
           echo "=============== buildozer.log (末尾80行) ==============="
           tail -n 80 buildozer.log || echo "(无日志文件)"
+          echo "=============== 错误上下文 ==============="
+          grep -nEi "error|failed|exception|not found|traceback|cannot|no such file" buildozer.log | tail -20 || true
           echo "=============== 结束 ==============="
 
       - name: Show build result

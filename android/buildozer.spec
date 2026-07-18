@@ -22,8 +22,8 @@ version = 1.0.0
 # python3, kivy: framework
 # pycryptodome: AES decrypt of ncm metadata/key
 # mutagen: write audio metadata
-# numpy: speed up large audio stream XOR
-requirements = python3,kivy,pycryptodome,mutagen,numpy
+# Android 版先不使用 numpy，避免 python-for-android 编译 numpy 失败
+requirements = python3,kivy,pycryptodome,mutagen
 
 # (list) Application permissions
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
