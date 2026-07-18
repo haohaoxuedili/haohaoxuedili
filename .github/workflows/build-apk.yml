@@ -11,46 +11,89 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 120
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install buildozer dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip python3-virtualenv \
+            autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
+            cmake libffi-dev libssl-dev automake autopoint gettext build-essential ccache
+          # 固定 buildozer / p4a / Cython 版本以保证可重复构建
+          pip3 install --upgrade "buildozer==1.5.0" "Cython==3.0.11" "virtualenv" "sh==2.0.7"
+          buildozer version
+
+      - name: Cache Android SDK / NDK / p4a
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer/android_sdk
+            ~/.buildozer/android_ndk
+            ~/.buildozer/android_packages
+            ~/.buildozer/global_packages
+            android/.buildozer
+          key: android-sdk-25b-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
+          restore-keys: android-sdk-25b-${{ runner.os }}-
+
       - name: Sync core module
-        # 确保根目录的最新 ncm2mp3.py 拷到 android/ 子目录
         run: |
           cp ncm2mp3.py android/ncm2mp3.py
 
-      - name: Build debug APK
-        id: build
-        uses: ArtemSBulgakov/buildozer-action@v1
-        with:
-          command: android debug
-          workdir: android
-          repository_root: .
-        continue-on-error: true
-
-      - name: Dump buildozer log (visible in Actions web UI)
-        if: always()
+      - name: Pre-check (test buildozer can read spec)
         working-directory: android
         run: |
-          # buildozer-action 会把日志输出到 stderr, 这里我们读 buildozer 自动产生的日志
-          for f in buildozer.log .buildozer/buildozer.log; do
-            if [ -f "$f" ]; then
-              echo "=========== $f BEGIN ==========="
-              cat "$f"
-              echo "=========== $f END ==========="
-            fi
-          done
+          echo "--- buildozer.spec ---"
+          cat buildozer.spec
+          echo "--- 工作目录 ---"
+          pwd
+          ls -la
+          echo "--- buildozer distcheck ---"
+          buildozer android clean || true
+
+      - name: Build debug APK
+        id: build
+        working-directory: android
+        continue-on-error: true
+        shell: bash
+        run: |
+          # 不使用 pipefail (tee 会输送真实退出码)
+          set +e
+          buildozer -v android debug 2>&1 | tee buildozer.log
+          ec=${PIPESTATUS[0]}
+          echo "BUILD_EXIT_CODE=$ec" >> $GITHUB_ENV
+          echo "buildozer 退出码: $ec"
+          # 即使失败也继续, 让 Dump 步骤能跑
+          exit 0
+
+      - name: Dump buildozer log tail (visible in Actions web UI)
+        if: always()
+        working-directory: android
+        shell: bash
+        run: |
+          echo "=============== buildozer.log 内容 (前100行) ==============="
+          head -n 100 buildozer.log || echo "(无日志文件)"
+          echo "=============== buildozer.log 内容 (末尾100行) ==============="
+          tail -n 100 buildozer.log || echo "(无日志文件)"
+          echo "=============== 结束 ==============="
 
       - name: Show build result
+        shell: bash
         run: |
-          if [ "${{ steps.build.outcome }}" = "success" ]; then
+          echo "BUILD_EXIT_CODE=${BUILD_EXIT_CODE}"
+          if [ "${BUILD_EXIT_CODE}" = "0" ]; then
             echo "BUILD OK"
           else
-            echo "BUILD FAILED, outcome=${{ steps.build.outcome }}"
+            echo "BUILD FAILED, exit_code=${BUILD_EXIT_CODE}"
             exit 1
           fi
 
@@ -61,15 +104,13 @@ jobs:
           name: ncm2mp3-apk
           path: android/bin/*.apk
           retention-days: 30
+          if-no-files-found: ignore
 
       - name: Upload buildozer log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: buildozer-log
-          path: |
-            android/buildozer.log
-            android/.buildozer/**/*.log
-            android/.buildozer/buildozer.log
+          path: android/buildozer.log
           retention-days: 7
           if-no-files-found: ignore
