@@ -10,7 +10,6 @@ from kivy.clock import Clock
 from kivy.core.text import LabelBase
 from kivy.core.window import Window
 from kivy.lang import Builder
-from kivy.properties import StringProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
@@ -29,19 +28,27 @@ if sys.platform.startswith('linux') and 'ANDROID_ROOT' in os.environ:
 
 
 class ZhLabel(Label):
-    font_name = StringProperty('AndroidFallback')
+    def __init__(self, **kwargs):
+        kwargs.setdefault('font_name', 'AndroidFallback')
+        super().__init__(**kwargs)
 
 
 class ZhButton(Button):
-    font_name = StringProperty('AndroidFallback')
+    def __init__(self, **kwargs):
+        kwargs.setdefault('font_name', 'AndroidFallback')
+        super().__init__(**kwargs)
 
 
 class ZhTextInput(TextInput):
-    font_name = StringProperty('AndroidFallback')
+    def __init__(self, **kwargs):
+        kwargs.setdefault('font_name', 'AndroidFallback')
+        super().__init__(**kwargs)
 
 
 class ZhToggleButton(ToggleButton):
-    font_name = StringProperty('AndroidFallback')
+    def __init__(self, **kwargs):
+        kwargs.setdefault('font_name', 'AndroidFallback')
+        super().__init__(**kwargs)
 
 
 KV = """
