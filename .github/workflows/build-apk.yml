@@ -107,8 +107,10 @@ jobs:
           yes | buildozer -v android debug 2>&1 | tee buildozer.log
           ec=${PIPESTATUS[1]}
           echo "BUILD_EXIT_CODE=$ec" >> $GITHUB_ENV
-          echo "buildozer 退出码: $ec"
-          ls -lh ./*.apk bin/*.apk 2>/dev/null || true
+          echo "buildozer exit code: $ec"
+          mkdir -p apk-output
+          find . -name "*.apk" -type f -print -exec cp {} apk-output/ \;
+          ls -lh apk-output/*.apk 2>/dev/null || true
           exit 0
 
       - name: Dump buildozer log tail (visible in Actions web UI)
@@ -126,11 +128,8 @@ jobs:
         shell: bash
         run: |
           echo "BUILD_EXIT_CODE=${BUILD_EXIT_CODE}"
-          APK_PATH=$(find android/.buildozer -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
-          if [ -n "$APK_PATH" ]; then
-            echo "BUILD OK: APK found at $APK_PATH"
-          elif ls android/*.apk android/bin/*.apk >/dev/null 2>&1; then
-            echo "BUILD OK: APK found in android root/bin"
+          if ls android/apk-output/*.apk >/dev/null 2>&1; then
+            echo "BUILD OK: APK found"
           else
             echo "BUILD FAILED: no APK found, exit_code=${BUILD_EXIT_CODE}"
             exit 1
@@ -141,10 +140,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ncm2mp3-apk
-          path: |
-            android/*.apk
-            android/bin/*.apk
-            android/.buildozer/**/build/outputs/apk/**/*.apk
+          path: android/apk-output/*.apk
           retention-days: 30
           if-no-files-found: ignore
 
