@@ -16,22 +16,17 @@ from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 
-# Android 上 Kivy 默认字体不支持中文，注册系统字体并设为默认
+# Android 上 Kivy 默认字体不支持中文，使用内置中文字体
 if sys.platform.startswith('linux') and 'ANDROID_ROOT' in os.environ:
-    _ANDROID_FONTS = [
-        '/system/fonts/DroidSansFallback.ttf',
-        '/system/fonts/NotoSansCJK-Regular.ttc',
-    ]
-    for _font_path in _ANDROID_FONTS:
-        if os.path.isfile(_font_path):
-            try:
-                LabelBase.register(name='AndroidFallback', fn_regular=_font_path)
-                Label.font_name = 'AndroidFallback'
-                Button.font_name = 'AndroidFallback'
-                TextInput.font_name = 'AndroidFallback'
-            except Exception as _exc:
-                print('font register failed:', _exc)
-            break
+    _bundled_font = os.path.join(os.path.dirname(__file__), 'DroidSansFallback.ttf')
+    if os.path.isfile(_bundled_font):
+        try:
+            LabelBase.register(name='AndroidFallback', fn_regular=_bundled_font)
+            Label.font_name = 'AndroidFallback'
+            Button.font_name = 'AndroidFallback'
+            TextInput.font_name = 'AndroidFallback'
+        except Exception as _exc:
+            print('font register failed:', _exc)
 
 KV = """
 #:kivy 2.2.0
