@@ -76,6 +76,14 @@ jobs:
           buildozer -v android debug 2>&1 | tee buildozer.log
           echo "BUILD_EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
 
+      - name: Dump buildozer log (visible in Actions web UI)
+        if: always() && steps.build.outcome != 'success'
+        working-directory: android
+        run: |
+          echo "=========== buildozer.log BEGIN ==========="
+          cat buildozer.log
+          echo "=========== buildozer.log END ==========="
+
       - name: Show build result
         run: |
           echo "BUILD_EXIT_CODE=${BUILD_EXIT_CODE}"
