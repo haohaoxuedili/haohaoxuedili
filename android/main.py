@@ -289,7 +289,14 @@ class RootWidget(BoxLayout):
                     result = core.decrypt_ncm(path, output_format=out_fmt, keep_intermediate=False)
                     Clock.schedule_once(lambda _dt, i=idx: self._set_status(children[i], '完成: ' + os.path.basename(result)))
                 except Exception as exc:
-                    Clock.schedule_once(lambda _dt, i=idx, e=exc: self._set_status(children[i], '失败: ' + str(e)[:40]))
+                    err_text = repr(exc)
+                    # 临时：把完整异常写到文件便于调试
+                    try:
+                        with open('/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test/error.log', 'a', encoding='utf-8') as f:
+                            f.write(err_text + '\n')
+                    except Exception:
+                        pass
+                    Clock.schedule_once(lambda _dt, i=idx, e=exc: self._set_status(children[i], '失败: ' + str(e)[:200]))
                 Clock.schedule_once(lambda _dt, v=(idx + 1) * 100 / total: setattr(self.ids.progress, 'value', v))
         finally:
             Clock.schedule_once(lambda _dt: self._finish_convert())
