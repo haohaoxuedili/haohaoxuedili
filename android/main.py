@@ -173,6 +173,17 @@ class RootWidget(BoxLayout):
     def _auto_test(self):
         try:
             self.ids.ffmpeg_lbl.text = '自动测试中...'
+            # 先测试 subprocess 能否直接执行 ffmpeg
+            core = self._load_core()
+            ffmpeg = core._find_ffmpeg()
+            try:
+                import subprocess
+                p = subprocess.run([ffmpeg, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                with open('/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test/ffmpeg_test.log', 'w', encoding='utf-8') as f:
+                    f.write(f'ffmpeg={ffmpeg}\ncode={p.returncode}\nout={p.stdout.decode()[:200]}\nerr={p.stderr.decode()[:200]}\n')
+            except Exception as e:
+                with open('/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test/ffmpeg_test.log', 'w', encoding='utf-8') as f:
+                    f.write(f'ffmpeg={ffmpeg}\nerror={repr(e)}\n')
             # 使用应用外部存储私有目录，避免 Android 10+ Scoped Storage 限制
             self.ids.path_input.text = '/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test'
             # 选择 MP3 格式以测试 FFmpeg 转码
