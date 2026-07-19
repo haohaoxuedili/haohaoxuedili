@@ -177,10 +177,21 @@ class RootWidget(BoxLayout):
             core = self._load_core()
             ffmpeg = core._find_ffmpeg()
             try:
-                import subprocess
-                p = subprocess.run([ffmpeg, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                import subprocess, shlex
+                # 测试 A: 直接列表参数
+                try:
+                    p1 = subprocess.run([ffmpeg, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    r1 = f'list code={p1.returncode}'
+                except Exception as e1:
+                    r1 = f'list error={repr(e1)}'
+                # 测试 B: 通过 sh -c
+                try:
+                    p2 = subprocess.run(['sh', '-c', f'{shlex.quote(ffmpeg)} -version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    r2 = f'shell code={p2.returncode}'
+                except Exception as e2:
+                    r2 = f'shell error={repr(e2)}'
                 with open('/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test/ffmpeg_test.log', 'w', encoding='utf-8') as f:
-                    f.write(f'ffmpeg={ffmpeg}\ncode={p.returncode}\nout={p.stdout.decode()[:200]}\nerr={p.stderr.decode()[:200]}\n')
+                    f.write(f'ffmpeg={ffmpeg}\n{r1}\n{r2}\n')
             except Exception as e:
                 with open('/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test/ffmpeg_test.log', 'w', encoding='utf-8') as f:
                     f.write(f'ffmpeg={ffmpeg}\nerror={repr(e)}\n')
