@@ -28,6 +28,7 @@ if os.path.isfile(_BUNDLED_FONT):
 KV = """
 #:kivy 2.2.0
 #:set ZH_FONT 'AndroidFallback'
+#:set TEXT_COLOR (0.12, 0.12, 0.12, 1)
 
 <RootWidget>:
     orientation: 'vertical'
@@ -37,6 +38,7 @@ KV = """
     Label:
         text: 'NCM 转 MP3 / FLAC'
         font_name: ZH_FONT
+        color: TEXT_COLOR
         font_size: dp(24)
         bold: True
         size_hint_y: None
@@ -46,6 +48,7 @@ KV = """
         id: ffmpeg_lbl
         text: '正在检测核心模块...'
         font_name: ZH_FONT
+        color: TEXT_COLOR
         font_size: dp(14)
         size_hint_y: None
         height: dp(28)
@@ -60,6 +63,7 @@ KV = """
         Label:
             text: '输出格式'
             font_name: ZH_FONT
+            color: TEXT_COLOR
             font_size: dp(14)
             size_hint_y: None
             height: dp(24)
@@ -136,6 +140,7 @@ KV = """
         id: filename
         text: ''
         font_name: ZH_FONT
+        color: TEXT_COLOR
         font_size: dp(12)
         halign: 'left'
         valign: 'middle'
@@ -144,6 +149,7 @@ KV = """
         id: status_text
         text: '等待中'
         font_name: ZH_FONT
+        color: TEXT_COLOR
         font_size: dp(12)
         size_hint_x: 0.35
         halign: 'right'
@@ -259,7 +265,12 @@ class RootWidget(BoxLayout):
         self.ids.start_btn.text = '重新开始'
 
     def _toast(self, msg):
-        popup = Popup(title='提示', content=Label(text=msg, font_name='AndroidFallback'), size_hint=(0.78, 0.22))
+        popup = Popup(
+            title='提示',
+            title_color=(0.12, 0.12, 0.12, 1),
+            content=Label(text=msg, font_name='AndroidFallback', color=(0.12, 0.12, 0.12, 1)),
+            size_hint=(0.78, 0.22)
+        )
         popup.open()
         Clock.schedule_once(lambda _dt: popup.dismiss(), 2)
 
