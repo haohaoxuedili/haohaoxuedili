@@ -49,9 +49,9 @@ KV = """
         text: '正在检测核心模块...'
         font_name: ZH_FONT
         color: TEXT_COLOR
-        font_size: dp(14)
+        font_size: dp(11)
         size_hint_y: None
-        height: dp(28)
+        height: dp(90)
         halign: 'left'
         text_size: self.size
 
@@ -175,10 +175,16 @@ class RootWidget(BoxLayout):
     def check_core(self):
         try:
             core = self._load_core()
+            # 调试: 显示 ffmpeg 搜索路径信息
+            import os, sys
+            from pathlib import Path
+            app_dir = Path(getattr(sys, '_APP_DIR', '') or os.environ.get('ANDROID_APP_PATH', ''))
+            file_dir = Path(__file__).resolve().parent if '__file__' in dir() else Path('.')
+            info = f'app_dir={app_dir}\nfile_dir={file_dir}\nhas_ffmpeg={core.has_ffmpeg()}'
             if core.has_ffmpeg():
-                self.ids.ffmpeg_lbl.text = '核心模块正常，FFmpeg 已就绪。'
+                self.ids.ffmpeg_lbl.text = '核心模块正常，FFmpeg 已就绪。\n' + info
             else:
-                self.ids.ffmpeg_lbl.text = '核心模块正常，未检测到 FFmpeg；建议输出 FLAC。'
+                self.ids.ffmpeg_lbl.text = '核心模块正常，未检测到 FFmpeg；建议输出 FLAC。\n' + info
         except Exception as exc:
             self.ids.ffmpeg_lbl.text = '核心模块异常: ' + repr(exc)
 
