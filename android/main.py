@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
 from pathlib import Path
 from threading import Thread
 
@@ -51,7 +50,7 @@ KV = """
         color: TEXT_COLOR
         font_size: dp(11)
         size_hint_y: None
-        height: dp(150)
+        height: dp(80)
         halign: 'left'
         text_size: self.size
 
@@ -167,50 +166,6 @@ class RootWidget(BoxLayout):
         self._files = []
         self._converting = False
         Clock.schedule_once(lambda _dt: self.check_core(), 0.5)
-        # 临时自动测试：启动后填充测试目录并触发转换
-        Clock.schedule_once(lambda _dt: self._auto_test(), 2.0)
-
-    def _auto_test(self):
-        try:
-            self.ids.ffmpeg_lbl.text = '自动测试中...'
-            # 先测试 subprocess 能否直接执行 ffmpeg
-            core = self._load_core()
-            ffmpeg = core._find_ffmpeg()
-            try:
-                import subprocess, shlex
-                # 测试 A: 直接列表参数
-                try:
-                    p1 = subprocess.run([ffmpeg, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    r1 = f'list code={p1.returncode}'
-                except Exception as e1:
-                    r1 = f'list error={repr(e1)}'
-                # 测试 B: 通过 sh -c
-                try:
-                    p2 = subprocess.run(['sh', '-c', f'{shlex.quote(ffmpeg)} -version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    r2 = f'shell code={p2.returncode} err={p2.stderr.decode()[:200]}'
-                except Exception as e2:
-                    r2 = f'shell error={repr(e2)}'
-                # 测试 C: 检查文件属性
-                try:
-                    p3 = subprocess.run(['sh', '-c', f'ls -lZ {shlex.quote(ffmpeg)}; id; pwd; echo $PATH'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    r3 = f'ls code={p3.returncode}\n{p3.stdout.decode()[:400]}'
-                except Exception as e3:
-                    r3 = f'ls error={repr(e3)}'
-                with open('/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test/ffmpeg_test.log', 'w', encoding='utf-8') as f:
-                    f.write(f'ffmpeg={ffmpeg}\n{r1}\n{r2}\n{r3}\n')
-            except Exception as e:
-                with open('/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test/ffmpeg_test.log', 'w', encoding='utf-8') as f:
-                    f.write(f'ffmpeg={ffmpeg}\nerror={repr(e)}\n')
-            # 使用应用外部存储私有目录，避免 Android 10+ Scoped Storage 限制
-            self.ids.path_input.text = '/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test'
-            # 选择 MP3 格式以测试 FFmpeg 转码
-            self.ids.fmt_mp3.state = 'down'
-            self.ids.fmt_auto.state = 'normal'
-            self.ids.fmt_flac.state = 'normal'
-            self.add_input_path()
-            Clock.schedule_once(lambda _dt: self.start_convert(), 0.5)
-        except Exception as exc:
-            self.ids.ffmpeg_lbl.text = '自动测试异常: ' + repr(exc)
 
     def _load_core(self):
         import ncm2mp3
@@ -219,26 +174,10 @@ class RootWidget(BoxLayout):
     def check_core(self):
         try:
             core = self._load_core()
-            # 调试: 显示 ffmpeg 搜索路径信息
-            import os, sys
-            from pathlib import Path
-            app_dir = Path(getattr(sys, '_APP_DIR', '') or os.environ.get('ANDROID_APP_PATH', ''))
-            file_dir = Path(__file__).resolve().parent if '__file__' in globals() else Path('.')
-            core_app_dir = core._android_app_dir()
-            cands = core._candidate_ffmpeg_paths()
-            cand_status = '\n'.join(f'{p} -> exists={p.is_file()}' for p in cands[:3])
-            try:
-                ffmpeg_path = core._find_ffmpeg()
-            except Exception as e:
-                ffmpeg_path = f'ERROR: {e}'
-            info = (f'app_dir={app_dir}\nfile_dir={file_dir}\n'
-                    f'core_app_dir={core_app_dir}\n'
-                    f'ffmpeg_path={ffmpeg_path}\n'
-                    f'has_ffmpeg={core.has_ffmpeg()}\n{cand_status}')
             if core.has_ffmpeg():
-                self.ids.ffmpeg_lbl.text = '核心模块正常，FFmpeg 已就绪。\n' + info
+                self.ids.ffmpeg_lbl.text = '核心模块正常，FFmpeg 已就绪。'
             else:
-                self.ids.ffmpeg_lbl.text = '核心模块正常，未检测到 FFmpeg；建议输出 FLAC。\n' + info
+                self.ids.ffmpeg_lbl.text = '核心模块正常，未检测到 FFmpeg；建议选择 FLAC 输出。'
         except Exception as exc:
             self.ids.ffmpeg_lbl.text = '核心模块异常: ' + repr(exc)
 
@@ -317,14 +256,7 @@ class RootWidget(BoxLayout):
                     result = core.decrypt_ncm(path, output_format=out_fmt, keep_intermediate=False)
                     Clock.schedule_once(lambda _dt, i=idx: self._set_status(children[i], '完成: ' + os.path.basename(result)))
                 except Exception as exc:
-                    err_text = repr(exc)
-                    # 临时：把完整异常写到文件便于调试
-                    try:
-                        with open('/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test/error.log', 'a', encoding='utf-8') as f:
-                            f.write(err_text + '\n')
-                    except Exception:
-                        pass
-                    Clock.schedule_once(lambda _dt, i=idx, e=exc: self._set_status(children[i], '失败: ' + str(e)[:200]))
+                    Clock.schedule_once(lambda _dt, i=idx, e=exc: self._set_status(children[i], '失败: ' + str(e)[:80]))
                 Clock.schedule_once(lambda _dt, v=(idx + 1) * 100 / total: setattr(self.ids.progress, 'value', v))
         finally:
             Clock.schedule_once(lambda _dt: self._finish_convert())
