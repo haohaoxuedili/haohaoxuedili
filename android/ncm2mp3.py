@@ -48,6 +48,14 @@ KEY_PREFIX = b"neteasecloudmusic"   # 17 字节
 META_HDR = "163 key(Don't modify):"  # 22 字节
 
 
+def _android_app_dir() -> Path | None:
+    """返回 Android 应用的私有资源目录 (通常是 files/app)。"""
+    app_dir_str = getattr(sys, "_APP_DIR", None) or os.environ.get("ANDROID_APP_PATH", None)
+    if app_dir_str:
+        return Path(app_dir_str)
+    return None
+
+
 def _candidate_ffmpeg_paths() -> list:
     """返回内置 FFmpeg 候选路径, 适用于开发模式 / PyInstaller 打包 / Android。
 
@@ -58,11 +66,11 @@ def _candidate_ffmpeg_paths() -> list:
     开发模式: 取当前文件所在目录的 bundled/ 子目录
     """
     cands = []
-    # 0) Android: 通过 os.environ['ANDROID_APP_PATH'] 或 sys.argv 推断 app 私有目录
+    # 0) Android: 通过 os.environ['ANDROID_APP_PATH'] 或 sys._APP_DIR 推断 app 私有目录
     if sys.platform.startswith("linux") and "ANDROID_ROOT" in os.environ:
-        # Kivy/Buildozer 下, PYTHONPATH 包含 app 目录; _app_dir =/_python_bundle
-        app_dir = Path(getattr(sys, "_APP_DIR", "")) or Path(os.environ.get("ANDROID_APP_PATH", ""))
-        if str(app_dir):
+        # Kivy/Buildozer 下, PYTHONPATH 包含 app 目录
+        app_dir = _android_app_dir()
+        if app_dir and app_dir.exists():
             # 根据 CPU 架构选择对应 FFmpeg 二进制
             machine = os.uname().machine.lower()
             if "aarch64" in machine:
@@ -105,12 +113,35 @@ def _candidate_ffmpeg_paths() -> list:
     return cands
 
 
+def _android_ffmpeg_executable(src: Path) -> Path:
+    """Android 上 APK 资源文件没有 x 权限, 复制到可写 files/ 目录后 chmod +x。"""
+    app_dir = _android_app_dir()
+    if app_dir:
+        # app_dir 通常是 files/app, 其上级 files/ 是可写的
+        writable_dir = app_dir.parent
+    else:
+        writable_dir = Path(__file__).resolve().parent
+    writable_dir.mkdir(parents=True, exist_ok=True)
+    dst = writable_dir / src.name
+    # 仅当目标不存在或大小不一致时才复制
+    if not dst.exists() or dst.stat().st_size != src.stat().st_size:
+        shutil.copy2(src, dst)
+    os.chmod(dst, 0o755)
+    return dst
+
+
 def _find_ffmpeg() -> str | None:
     """先查找内置 FFmpeg; 找不到再查 PATH。返回 ffmpeg 可执行文件路径或 None。"""
     # 1. 内置
     for p in _candidate_ffmpeg_paths():
         if p.is_file():
-            # Android/Linux: 确保有可执行权限
+            # Android: 资源文件无执行权限, 复制到可写目录再使用
+            if sys.platform.startswith("linux") and "ANDROID_ROOT" in os.environ:
+                try:
+                    return str(_android_ffmpeg_executable(p))
+                except OSError:
+                    continue
+            # Linux/macOS 等其他 posix: 确保有可执行权限
             if os.name == "posix":
                 try:
                     os.chmod(p, 0o755)

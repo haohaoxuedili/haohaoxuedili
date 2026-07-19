@@ -96,6 +96,13 @@ jobs:
         run: |
           cp ncm2mp3.py android/ncm2mp3.py
 
+      - name: Convert SVG icon to PNG
+        run: |
+          sudo apt update
+          sudo apt install -y librsvg2-bin
+          rsvg-convert -w 512 -h 512 gemini-svg.svg -o android/app.png
+          file android/app.png
+
       - name: Download Android FFmpeg binaries
         run: |
           mkdir -p android/bundled
