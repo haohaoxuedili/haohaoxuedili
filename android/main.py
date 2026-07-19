@@ -254,7 +254,7 @@ class RootWidget(BoxLayout):
             for idx, path in enumerate(self._files):
                 Clock.schedule_once(lambda _dt, i=idx: self._set_status(children[i], '转换中'))
                 try:
-                    result = core.decrypt_ncm_file(path, output_format=out_fmt, keep_intermediate=False)
+                    result = core.decrypt_ncm(path, output_format=out_fmt, keep_intermediate=False)
                     Clock.schedule_once(lambda _dt, i=idx: self._set_status(children[i], '完成: ' + os.path.basename(result)))
                 except Exception as exc:
                     Clock.schedule_once(lambda _dt, i=idx, e=exc: self._set_status(children[i], '失败: ' + str(e)[:40]))
