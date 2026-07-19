@@ -74,6 +74,8 @@ def _candidate_ffmpeg_paths() -> list:
             cands.append(app_dir / "bundled" / f"ffmpeg-{arch}.bin")
             cands.append(app_dir / "_python_bundle" / "_python_bundle" / "bundled" / f"ffmpeg-{arch}.bin")
             cands.append(app_dir / "ffmpeg")
+            # 备用: 用当前模块位置推断
+            cands.append(Path(__file__).resolve().parent / "bundled" / f"ffmpeg-{arch}.bin")
     # 1) PyInstaller onefile: sys._MEIPASS 临时解压目录
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
