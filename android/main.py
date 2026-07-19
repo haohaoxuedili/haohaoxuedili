@@ -191,7 +191,13 @@ class RootWidget(BoxLayout):
         self.ids.path_input.text = ''
 
     def scan_downloads(self):
-        for folder in ['/sdcard/Download', '/sdcard/Music', '/storage/emulated/0/Download']:
+        candidates = [
+            '/sdcard/Android/data/io.github.idoknow.ncm2mp3/files',
+            '/sdcard/Download',
+            '/sdcard/Music',
+            '/storage/emulated/0/Download',
+        ]
+        for folder in candidates:
             if os.path.isdir(folder):
                 self._add_path(folder)
                 return
