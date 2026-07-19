@@ -56,6 +56,26 @@ def _android_app_dir() -> Path | None:
     return None
 
 
+def _android_native_lib_dir() -> Path | None:
+    """通过 pyjnius 获取 Android APK 的 nativeLibraryDir (lib/<abi>)。"""
+    try:
+        from jnius import autoclass
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        activity = PythonActivity.mActivity
+        if activity is None:
+            return None
+        ctx = activity.getApplicationContext()
+        if ctx is None:
+            return None
+        info = ctx.getApplicationInfo()
+        nld = info.nativeLibraryDir
+        if nld:
+            return Path(nld)
+    except Exception:
+        pass
+    return None
+
+
 def _candidate_ffmpeg_paths() -> list:
     """返回内置 FFmpeg 候选路径, 适用于开发模式 / PyInstaller 打包 / Android。
 
@@ -66,6 +86,10 @@ def _candidate_ffmpeg_paths() -> list:
     开发模式: 取当前文件所在目录的 bundled/ 子目录
     """
     cands = []
+    # -1) Android 首选: nativeLibraryDir 中的 libffmpeg.so (避免 SELinux 禁止执行 app_data_file)
+    nld = _android_native_lib_dir()
+    if nld:
+        cands.append(Path(nld) / "libffmpeg.so")
     # 0) Android: 通过 os.environ['ANDROID_APP_PATH'] 或 sys._APP_DIR 推断 app 私有目录
     #   真机/模拟器上 sys.platform 可能是 'linux', 且不一定有 ANDROID_ROOT,
     #   因此用 _android_app_dir() 是否存在来判断更可靠。
@@ -135,6 +159,10 @@ def _find_ffmpeg() -> str | None:
     # 1. 内置
     for p in _candidate_ffmpeg_paths():
         if p.is_file():
+            # nativeLibraryDir 中的 so 可直接执行, 不要复制到 app_data_file 目录
+            nld = _android_native_lib_dir()
+            if nld and p.parent.resolve() == nld.resolve():
+                return str(p)
             # Android: 资源文件无执行权限, 复制到可写目录再使用
             if _android_app_dir() is not None:
                 try:

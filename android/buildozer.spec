@@ -46,6 +46,10 @@ android.ndk = 25b
 # (list) Architectures of Android APKs to build
 android.archs = arm64-v8a, armeabi-v7a
 
+# (list) Android additional libraries to copy into lib/<abi>
+android.add_libs_arm64_v8a = libs/arm64-v8a/libffmpeg.so
+android.add_libs_armeabi_v7a = libs/armeabi-v7a/libffmpeg.so
+
 # (str) Orientation of app
 orientation = portrait
 

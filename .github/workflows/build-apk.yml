@@ -105,21 +105,28 @@ jobs:
 
       - name: Download Android FFmpeg binaries
         run: |
+          # 同时打包成 native lib (.so) 和普通资源，运行时优先从 nativeLibraryDir 加载
           mkdir -p android/bundled
+          mkdir -p android/libs/arm64-v8a
+          mkdir -p android/libs/armeabi-v7a
           cd android/bundled
           # arm64-v8a
           wget -q https://github.com/Khang-NT/ffmpeg-binary-android/releases/download/2018-07-31/arm64-v8a-lite.tar.bz2 -O arm64.tar.bz2
           mkdir arm64 && tar -xjf arm64.tar.bz2 -C arm64
-          find arm64 -name ffmpeg -type f -exec mv {} ffmpeg-arm64.bin \;
+          find arm64 -name ffmpeg -type f -exec cp {} ffmpeg-arm64.bin \;
+          find arm64 -name ffmpeg -type f -exec cp {} ../libs/arm64-v8a/libffmpeg.so \;
           # armeabi-v7a
           wget -q https://github.com/Khang-NT/ffmpeg-binary-android/releases/download/2018-07-31/armv7-a-lite.tar.bz2 -O armv7.tar.bz2
           mkdir armv7 && tar -xjf armv7.tar.bz2 -C armv7
-          find armv7 -name ffmpeg -type f -exec mv {} ffmpeg-armv7.bin \;
+          find armv7 -name ffmpeg -type f -exec cp {} ffmpeg-armv7.bin \;
+          find armv7 -name ffmpeg -type f -exec cp {} ../libs/armeabi-v7a/libffmpeg.so \;
           rm -rf arm64 armv7 *.tar.bz2
           chmod +x ffmpeg-*.bin
           echo "--- FFmpeg binaries ---"
           ls -lh
           file ffmpeg-*.bin || true
+          echo "--- FFmpeg native libs ---"
+          ls -lh ../libs/arm64-v8a ../libs/armeabi-v7a || true
 
       - name: Pre-check (test buildozer can read spec)
         working-directory: android
