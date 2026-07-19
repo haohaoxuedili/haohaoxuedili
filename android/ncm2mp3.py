@@ -67,23 +67,23 @@ def _candidate_ffmpeg_paths() -> list:
     """
     cands = []
     # 0) Android: 通过 os.environ['ANDROID_APP_PATH'] 或 sys._APP_DIR 推断 app 私有目录
-    if sys.platform.startswith("linux") and "ANDROID_ROOT" in os.environ:
-        # Kivy/Buildozer 下, PYTHONPATH 包含 app 目录
-        app_dir = _android_app_dir()
-        if app_dir and app_dir.exists():
-            # 根据 CPU 架构选择对应 FFmpeg 二进制
-            machine = os.uname().machine.lower()
-            if "aarch64" in machine:
-                arch = "arm64"
-            elif "arm" in machine:
-                arch = "armv7"
-            else:
-                arch = "arm64"
-            cands.append(app_dir / "bundled" / f"ffmpeg-{arch}.bin")
-            cands.append(app_dir / "_python_bundle" / "_python_bundle" / "bundled" / f"ffmpeg-{arch}.bin")
-            cands.append(app_dir / "ffmpeg")
-            # 备用: 用当前模块位置推断
-            cands.append(Path(__file__).resolve().parent / "bundled" / f"ffmpeg-{arch}.bin")
+    #   真机/模拟器上 sys.platform 可能是 'linux', 且不一定有 ANDROID_ROOT,
+    #   因此用 _android_app_dir() 是否存在来判断更可靠。
+    app_dir = _android_app_dir()
+    if app_dir and app_dir.exists():
+        # 根据 CPU 架构选择对应 FFmpeg 二进制
+        machine = os.uname().machine.lower()
+        if "aarch64" in machine:
+            arch = "arm64"
+        elif "arm" in machine:
+            arch = "armv7"
+        else:
+            arch = "arm64"
+        cands.append(app_dir / "bundled" / f"ffmpeg-{arch}.bin")
+        cands.append(app_dir / "_python_bundle" / "_python_bundle" / "bundled" / f"ffmpeg-{arch}.bin")
+        cands.append(app_dir / "ffmpeg")
+        # 备用: 用当前模块位置推断
+        cands.append(Path(__file__).resolve().parent / "bundled" / f"ffmpeg-{arch}.bin")
     # 1) PyInstaller onefile: sys._MEIPASS 临时解压目录
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
@@ -136,7 +136,7 @@ def _find_ffmpeg() -> str | None:
     for p in _candidate_ffmpeg_paths():
         if p.is_file():
             # Android: 资源文件无执行权限, 复制到可写目录再使用
-            if sys.platform.startswith("linux") and "ANDROID_ROOT" in os.environ:
+            if _android_app_dir() is not None:
                 try:
                     return str(_android_ffmpeg_executable(p))
                 except OSError:
