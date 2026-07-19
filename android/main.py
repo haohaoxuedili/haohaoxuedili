@@ -182,11 +182,14 @@ class RootWidget(BoxLayout):
             file_dir = Path(__file__).resolve().parent if '__file__' in globals() else Path('.')
             core_app_dir = core._android_app_dir()
             cands = core._candidate_ffmpeg_paths()
-            cand_status = '\n'.join(f'{p} -> exists={p.is_file()}' for p in cands[:6])
+            cand_status = '\n'.join(f'{p} -> exists={p.is_file()}' for p in cands[:3])
+            try:
+                ffmpeg_path = core._find_ffmpeg()
+            except Exception as e:
+                ffmpeg_path = f'ERROR: {e}'
             info = (f'app_dir={app_dir}\nfile_dir={file_dir}\n'
                     f'core_app_dir={core_app_dir}\n'
-                    f'sys._APP_DIR={getattr(sys, "_APP_DIR", None)}\n'
-                    f'ANDROID_APP_PATH={os.environ.get("ANDROID_APP_PATH", None)}\n'
+                    f'ffmpeg_path={ffmpeg_path}\n'
                     f'has_ffmpeg={core.has_ffmpeg()}\n{cand_status}')
             if core.has_ffmpeg():
                 self.ids.ffmpeg_lbl.text = '核心模块正常，FFmpeg 已就绪。\n' + info
