@@ -167,6 +167,13 @@ class RootWidget(BoxLayout):
         self._files = []
         self._converting = False
         Clock.schedule_once(lambda _dt: self.check_core(), 0.5)
+        # 临时自动测试：启动后填充测试目录并触发转换
+        Clock.schedule_once(lambda _dt: self._auto_test(), 2.0)
+
+    def _auto_test(self):
+        self.ids.path_input.text = '/sdcard/ncm_test/转换'
+        self.add_input_path()
+        Clock.schedule_once(lambda _dt: self.start_convert(), 0.5)
 
     def _load_core(self):
         import ncm2mp3
