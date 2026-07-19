@@ -175,6 +175,10 @@ class RootWidget(BoxLayout):
             self.ids.ffmpeg_lbl.text = '自动测试中...'
             # 使用应用外部存储私有目录，避免 Android 10+ Scoped Storage 限制
             self.ids.path_input.text = '/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test'
+            # 选择 MP3 格式以测试 FFmpeg 转码
+            self.ids.fmt_mp3.state = 'down'
+            self.ids.fmt_auto.state = 'normal'
+            self.ids.fmt_flac.state = 'normal'
             self.add_input_path()
             Clock.schedule_once(lambda _dt: self.start_convert(), 0.5)
         except Exception as exc:
