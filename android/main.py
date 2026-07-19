@@ -51,7 +51,7 @@ KV = """
         color: TEXT_COLOR
         font_size: dp(11)
         size_hint_y: None
-        height: dp(90)
+        height: dp(150)
         halign: 'left'
         text_size: self.size
 
