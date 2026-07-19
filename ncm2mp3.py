@@ -63,8 +63,16 @@ def _candidate_ffmpeg_paths() -> list:
         # Kivy/Buildozer 下, PYTHONPATH 包含 app 目录; _app_dir =/_python_bundle
         app_dir = Path(getattr(sys, "_APP_DIR", "")) or Path(os.environ.get("ANDROID_APP_PATH", ""))
         if str(app_dir):
-            cands.append(app_dir / "bundled" / "ffmpeg")
-            cands.append(app_dir / "_python_bundle" / "_python_bundle" / "bundled" / "ffmpeg")
+            # 根据 CPU 架构选择对应 FFmpeg 二进制
+            machine = os.uname().machine.lower()
+            if "aarch64" in machine:
+                arch = "arm64"
+            elif "arm" in machine:
+                arch = "armv7"
+            else:
+                arch = "arm64"
+            cands.append(app_dir / "bundled" / f"ffmpeg-{arch}.bin")
+            cands.append(app_dir / "_python_bundle" / "_python_bundle" / "bundled" / f"ffmpeg-{arch}.bin")
             cands.append(app_dir / "ffmpeg")
     # 1) PyInstaller onefile: sys._MEIPASS 临时解压目录
     meipass = getattr(sys, "_MEIPASS", None)
