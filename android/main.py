@@ -171,9 +171,13 @@ class RootWidget(BoxLayout):
         Clock.schedule_once(lambda _dt: self._auto_test(), 2.0)
 
     def _auto_test(self):
-        self.ids.path_input.text = '/sdcard/ncm_test/转换'
-        self.add_input_path()
-        Clock.schedule_once(lambda _dt: self.start_convert(), 0.5)
+        try:
+            self.ids.ffmpeg_lbl.text = '自动测试中...'
+            self.ids.path_input.text = '/sdcard/ncm_test/转换'
+            self.add_input_path()
+            Clock.schedule_once(lambda _dt: self.start_convert(), 0.5)
+        except Exception as exc:
+            self.ids.ffmpeg_lbl.text = '自动测试异常: ' + repr(exc)
 
     def _load_core(self):
         import ncm2mp3
