@@ -187,11 +187,17 @@ class RootWidget(BoxLayout):
                 # 测试 B: 通过 sh -c
                 try:
                     p2 = subprocess.run(['sh', '-c', f'{shlex.quote(ffmpeg)} -version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    r2 = f'shell code={p2.returncode}'
+                    r2 = f'shell code={p2.returncode} err={p2.stderr.decode()[:200]}'
                 except Exception as e2:
                     r2 = f'shell error={repr(e2)}'
+                # 测试 C: 检查文件属性
+                try:
+                    p3 = subprocess.run(['sh', '-c', f'ls -lZ {shlex.quote(ffmpeg)}; id; pwd; echo $PATH'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    r3 = f'ls code={p3.returncode}\n{p3.stdout.decode()[:400]}'
+                except Exception as e3:
+                    r3 = f'ls error={repr(e3)}'
                 with open('/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test/ffmpeg_test.log', 'w', encoding='utf-8') as f:
-                    f.write(f'ffmpeg={ffmpeg}\n{r1}\n{r2}\n')
+                    f.write(f'ffmpeg={ffmpeg}\n{r1}\n{r2}\n{r3}\n')
             except Exception as e:
                 with open('/sdcard/Android/data/io.github.idoknow.ncm2mp3/files/ncm_test/ffmpeg_test.log', 'w', encoding='utf-8') as f:
                     f.write(f'ffmpeg={ffmpeg}\nerror={repr(e)}\n')
