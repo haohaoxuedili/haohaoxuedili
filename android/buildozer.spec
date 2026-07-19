@@ -50,6 +50,18 @@ android.archs = arm64-v8a, armeabi-v7a
 android.add_libs_arm64_v8a = libs/arm64-v8a/libffmpeg.so
 android.add_libs_armeabi_v7a = libs/armeabi-v7a/libffmpeg.so
 
+# (bool) Indicate if the application should be compiled in debug mode
+debug = 0
+
+# (str) Android release keystore path (relative to source.dir)
+android.keystore.path = release-key.keystore
+# (str) The Android keystore alias
+android.keystore.alias = __KEY_ALIAS__
+# (str) Keystore password
+android.keystore.storepass = __STOREPASS__
+# (str) Key password
+android.keystore.keypass = __KEYPASS__
+
 # (str) Orientation of app
 orientation = portrait
 

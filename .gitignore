@@ -46,3 +46,16 @@ bundled/ffmpeg
 # 安装器中间产物
 installer/Output/
 installer/build/
+
+# 本地 FFmpeg 二进制与临时测试目录
+/ffmpeg-*.bin
+/tmp_android_test/
+android/bundled/ffmpeg-*.bin
+android/bundled/arm64/
+android/bundled/armv7/
+android/libs/
+
+# 签名密钥（绝不能提交）
+*.keystore
+*.jks
+android/release-key*

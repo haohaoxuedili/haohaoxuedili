@@ -1,0 +1,237 @@
+name: Release Android APK
+
+# 触发条件: 手动触发（可指定版本号）或推送 v 开头的 tag
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（例如 1.0.3），会创建对应 tag v{version}'
+        required: true
+        default: '1.0.3'
+      release_notes:
+        description: 'Release 说明（可选）'
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install buildozer dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git zip unzip python3-pip python3-virtualenv \
+            autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 \
+            cmake libffi-dev libssl-dev automake autopoint gettext build-essential ccache
+          pip3 install --upgrade "buildozer==1.5.0" "Cython==3.0.11" "virtualenv" "sh==2.0.7"
+          buildozer version
+
+      - name: Link android-actions SDK to buildozer's expected location
+        shell: bash
+        run: |
+          BUILD_SDK="$HOME/.buildozer/android_sdk"
+          REAL_SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          mkdir -p "$HOME/.buildozer"
+          if [ -d "$REAL_SDK" ]; then
+            if [ ! -e "$BUILD_SDK" ]; then
+              ln -s "$REAL_SDK" "$BUILD_SDK"
+            fi
+          else
+            echo "找不到 SDK at $REAL_SDK"
+            exit 1
+          fi
+
+      - name: Install Android API 33 platform
+        shell: bash
+        run: |
+          export ANDROID_HOME="$HOME/.buildozer/android_sdk"
+          export ANDROID_SDK_ROOT="$HOME/.buildozer/android_sdk"
+          CMDTOOLS="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin"
+          if [ ! -d "$CMDTOOLS" ]; then
+            CMDTOOLS="$ANDROID_SDK_ROOT/cmdline-tools/16.0/bin"
+          fi
+          yes | "$CMDTOOLS/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$CMDTOOLS/sdkmanager" "platforms;android-33" "build-tools;33.0.2" "platform-tools"
+
+      - name: Cache Android SDK / NDK / p4a / build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer/android_ndk
+            ~/.buildozer/android_packages
+            ~/.buildozer/global_packages
+            ~/.buildozer/android/platform
+            android/.buildozer
+            android/bin
+          key: android-release-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}-${{ hashFiles('.github/workflows/release-apk.yml') }}
+          restore-keys: |
+            android-release-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}-
+            android-release-${{ runner.os }}-
+
+      - name: Sync core module
+        run: |
+          cp ncm2mp3.py android/ncm2mp3.py
+
+      - name: Convert SVG icon to PNG
+        run: |
+          sudo apt update
+          sudo apt install -y librsvg2-bin
+          rsvg-convert -w 512 -h 512 gemini-svg.svg -o android/app.png
+          file android/app.png
+
+      - name: Download Android FFmpeg binaries
+        run: |
+          mkdir -p android/bundled
+          mkdir -p android/libs/arm64-v8a
+          mkdir -p android/libs/armeabi-v7a
+          cd android/bundled
+          wget -q https://github.com/Khang-NT/ffmpeg-binary-android/releases/download/2018-07-31/arm64-v8a-lite.tar.bz2 -O arm64.tar.bz2
+          mkdir arm64 && tar -xjf arm64.tar.bz2 -C arm64
+          find arm64 -name ffmpeg -type f -exec cp {} ffmpeg-arm64.bin \;
+          find arm64 -name ffmpeg -type f -exec cp {} ../libs/arm64-v8a/libffmpeg.so \;
+          wget -q https://github.com/Khang-NT/ffmpeg-binary-android/releases/download/2018-07-31/armv7-a-lite.tar.bz2 -O armv7.tar.bz2
+          mkdir armv7 && tar -xjf armv7.tar.bz2 -C armv7
+          find armv7 -name ffmpeg -type f -exec cp {} ffmpeg-armv7.bin \;
+          find armv7 -name ffmpeg -type f -exec cp {} ../libs/armeabi-v7a/libffmpeg.so \;
+          rm -rf arm64 armv7 *.tar.bz2
+          chmod +x ffmpeg-*.bin
+
+      - name: Decode release keystore
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/release-key.keystore
+          ls -lh android/release-key.keystore
+
+      - name: Configure release signing in buildozer.spec
+        shell: bash
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os
+          p = 'android/buildozer.spec'
+          s = open(p).read()
+          s = s.replace('__KEY_ALIAS__', os.environ['KEY_ALIAS'])
+          s = s.replace('__STOREPASS__', os.environ['KEYSTORE_PASSWORD'])
+          s = s.replace('__KEYPASS__', os.environ['KEY_PASSWORD'])
+          open(p, 'w').write(s)
+          PY
+          echo "--- buildozer.spec 签名配置 ---"
+          grep -E '^android\.keystore|^debug' android/buildozer.spec
+
+      - name: Build release APK
+        id: build
+        working-directory: android
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          export ANDROID_HOME="$HOME/.buildozer/android_sdk"
+          export ANDROID_SDK_ROOT="$HOME/.buildozer/android_sdk"
+          yes | buildozer -v android release 2>&1 | tee buildozer-release.log
+          ec=${PIPESTATUS[1]}
+          echo "BUILD_EXIT_CODE=$ec" >> $GITHUB_ENV
+          echo "buildozer exit code: $ec"
+          rm -rf apk-output
+          mkdir -p apk-output
+          find bin -maxdepth 2 -name "*.apk" -type f -print -exec cp {} apk-output/ \;
+          ls -lh apk-output/*.apk 2>/dev/null || true
+          exit 0
+
+      - name: Dump buildozer release log tail
+        if: always()
+        working-directory: android
+        shell: bash
+        run: |
+          echo "=============== buildozer-release.log (末尾 80 行) ==============="
+          tail -n 80 buildozer-release.log || echo "(无日志文件)"
+          echo "=============== 错误上下文 ==============="
+          grep -nEi "error|failed|exception|not found|traceback|cannot|no such file" buildozer-release.log | tail -20 || true
+          echo "=============== 结束 ==============="
+
+      - name: Verify release APK exists
+        shell: bash
+        run: |
+          echo "BUILD_EXIT_CODE=${BUILD_EXIT_CODE}"
+          if ls android/apk-output/*.apk >/dev/null 2>&1; then
+            echo "BUILD OK: release APK found"
+          else
+            echo "BUILD FAILED: no APK found, exit_code=${BUILD_EXIT_CODE}"
+            exit 1
+          fi
+
+      - name: Upload release APK artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ncm2mp3-release-apk
+          path: android/apk-output/*.apk
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload buildozer release log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-release-log
+          path: android/buildozer-release.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Determine release tag
+        id: tag
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="v${{ github.event.inputs.version }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$TAG"
+
+      - name: Create GitHub Release
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          NOTES="${{ github.event.inputs.release_notes }}"
+          if [ -z "$NOTES" ]; then
+            NOTES="Release ${TAG}"
+          fi
+          cd android/apk-output
+          gh release create "$TAG" \
+            --target "${{ github.sha }}" \
+            --title "NCM 转 MP3 / FLAC ${TAG}" \
+            --notes "$NOTES" \
+            *.apk
