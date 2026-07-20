@@ -134,7 +134,7 @@ jobs:
             echo "have_keystore=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build release APK (unsigned)
+      - name: Build debug APK and re-sign as release
         id: build
         working-directory: android
         continue-on-error: true
@@ -143,12 +143,12 @@ jobs:
           set +e
           export ANDROID_HOME="$HOME/.buildozer/android_sdk"
           export ANDROID_SDK_ROOT="$HOME/.buildozer/android_sdk"
-          # 注释掉 buildozer.spec 里的签名配置，生成 unsigned release APK
-          # 然后我们用自己的 apksigner 签名，避免 buildozer 签名环节失败导致无产物
+          # 先注释掉 buildozer.spec 里的签名配置，生成 debug APK
+          # debug 模式更稳定，之后再手动 apksigner 重签名为 release
           sed -i 's/^android\.keystore\./#&/' buildozer.spec
           echo "--- buildozer.spec 签名相关（应已注释） ---"
           grep -nE 'keystore|debug' buildozer.spec || true
-          yes | buildozer -v android release 2>&1 | tee buildozer-release.log
+          yes | buildozer -v android debug 2>&1 | tee buildozer-release.log
           ec=${PIPESTATUS[1]}
           echo "BUILD_EXIT_CODE=$ec" >> $GITHUB_ENV
           echo "buildozer exit code: $ec"
@@ -159,22 +159,24 @@ jobs:
           rm -rf apk-output
           mkdir -p apk-output
           # 从所有可能的位置收集 APK
-          find . -name "*-release*.apk" -o -name "*.apk" 2>/dev/null | while read f; do
+          find . -name "*.apk" -type f 2>/dev/null | while read f; do
             echo "found apk: $f"
             cp "$f" apk-output/
           done
           ls -lh apk-output/ 2>/dev/null || true
           exit 0
 
-      - name: Dump buildozer release log tail
+      - name: Dump buildozer log tail
         if: always()
         working-directory: android
         shell: bash
         run: |
-          echo "=============== buildozer-release.log (末尾 200 行) ==============="
-          tail -n 200 buildozer-release.log || echo "(无日志文件)"
+          echo "=============== buildozer-release.log (末尾 300 行) ==============="
+          tail -n 300 buildozer-release.log || echo "(无日志文件)"
           echo "=============== 错误上下文 ==============="
-          grep -nEi "error|failed|exception|not found|traceback|cannot|no such file|warning" buildozer-release.log | tail -40 || true
+          grep -nEi "error|failed|exception|not found|traceback|cannot|no such file|warning" buildozer-release.log | tail -60 || true
+          echo "=============== 前 500 行关键上下文 ==============="
+          sed -n '1,500p' buildozer-release.log || true
           echo "=============== 结束 ==============="
 
       - name: Sign APK with apksigner
@@ -203,7 +205,7 @@ jobs:
               --ks-pass "pass:$KEYSTORE_PASSWORD" \
               --key-pass "pass:$KEY_PASSWORD" \
               --out "${apk%.apk}-signed.apk" \
-              "${apk%.apk}-aligned.apk"
+              "${apk%.apk}-aligned.apk" 2>&1
             "$BUILD_TOOLS/apksigner" verify --verbose "${apk%.apk}-signed.apk" || true
           done
           # 仅保留签名后的 APK
