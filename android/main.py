@@ -15,6 +15,9 @@ from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 
+# Android 文件选择器回调标识
+_PICK_FILES_REQUEST = 42
+
 # Android 上 Kivy 默认字体不支持中文，注册内置中文字体
 _BUNDLED_FONT = os.path.join(os.path.dirname(__file__), 'DroidSansFallback.ttf')
 if os.path.isfile(_BUNDLED_FONT):
@@ -89,7 +92,7 @@ KV = """
 
     TextInput:
         id: path_input
-        hint_text: '输入或粘贴 .ncm 文件路径，或文件夹路径'
+        hint_text: '输入或粘贴 .ncm 文件/文件夹路径（或点击下方选择文件）'
         font_name: ZH_FONT
         multiline: False
         size_hint_y: None
@@ -100,9 +103,9 @@ KV = """
         height: dp(52)
         spacing: dp(8)
         Button:
-            text: '添加路径'
+            text: '选择文件'
             font_name: ZH_FONT
-            on_press: root.add_input_path()
+            on_press: root.pick_files()
         Button:
             text: '扫描下载目录'
             font_name: ZH_FONT
@@ -165,6 +168,8 @@ class RootWidget(BoxLayout):
         super().__init__(**kwargs)
         self._files = []
         self._converting = False
+        self._activity = None
+        self._register_activity_callback()
         Clock.schedule_once(lambda _dt: self.check_core(), 0.5)
 
     def _load_core(self):
@@ -181,6 +186,13 @@ class RootWidget(BoxLayout):
         except Exception as exc:
             self.ids.ffmpeg_lbl.text = '核心模块异常: ' + repr(exc)
 
+    def _register_activity_callback(self):
+        try:
+            from android import activity
+            activity.bind(on_activity_result=self._on_activity_result)
+        except Exception as exc:
+            print('bind activity callback failed:', exc)
+
     def add_input_path(self):
         value = self.ids.path_input.text.strip().strip('"')
         if not value:
@@ -188,6 +200,122 @@ class RootWidget(BoxLayout):
             return
         self._add_path(value)
         self.ids.path_input.text = ''
+
+    def pick_files(self):
+        """调用 Android 原生文件选择器（支持多选 .ncm）。"""
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Intent = autoclass('android.content.Intent')
+
+            activity = PythonActivity.mActivity
+            if activity is None:
+                self._toast('无法获取 Activity')
+                return
+            self._activity = activity
+
+            intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            intent.addCategory(Intent.CATEGORY_OPENABLE)
+            intent.setType('*/*')
+            # 仅允许选择 .ncm 文件
+            mime_types = ['audio/*', 'application/octet-stream']
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, mime_types)
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, True)
+            intent.putExtra(Intent.EXTRA_LOCAL_ONLY, True)
+
+            activity.startActivityForResult(intent, _PICK_FILES_REQUEST)
+            self._toast('请选择 .ncm 文件（可多选）')
+        except Exception as exc:
+            self._toast('打开文件选择器失败: ' + str(exc)[:80])
+
+    def _on_activity_result(self, request_code, result_code, intent):
+        if request_code != _PICK_FILES_REQUEST:
+            return
+        if result_code != -1:  # Activity.RESULT_OK == -1
+            self._toast('未选择文件')
+            return
+        if intent is None:
+            return
+
+        try:
+            uris = []
+            clip_data = intent.getClipData()
+            if clip_data:
+                for i in range(clip_data.getItemCount()):
+                    item = clip_data.getItemAt(i)
+                    uris.append(item.getUri())
+            else:
+                data = intent.getData()
+                if data:
+                    uris.append(data)
+
+            if not uris:
+                self._toast('未获取到文件')
+                return
+
+            copied = []
+            for uri in uris:
+                local_path = self._copy_uri_to_temp(uri)
+                if local_path:
+                    copied.append(local_path)
+            if copied:
+                self._add_files(copied)
+            else:
+                self._toast('没有可转换的 .ncm 文件')
+        except Exception as exc:
+            self._toast('处理选择结果失败: ' + str(exc)[:80])
+
+    def _copy_uri_to_temp(self, uri):
+        """把 content:// URI 复制到 App 私有缓存目录，返回本地路径。"""
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            activity = PythonActivity.mActivity
+            ctx = activity.getApplicationContext()
+            content_resolver = ctx.getContentResolver()
+
+            # 查询原始文件名
+            cursor = content_resolver.query(uri, None, None, None, None)
+            display_name = None
+            if cursor:
+                if cursor.moveToFirst():
+                    idx = cursor.getColumnIndex('_display_name')
+                    if idx >= 0:
+                        display_name = cursor.getString(idx)
+                cursor.close()
+
+            if not display_name:
+                import uuid
+                display_name = 'unknown_' + uuid.uuid4().hex[:8] + '.ncm'
+            if not display_name.lower().endswith('.ncm'):
+                display_name += '.ncm'
+
+            cache_dir = Path(ctx.getCacheDir().getAbsolutePath()) / 'picked_ncm'
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            dst = cache_dir / display_name
+
+            # 通过 content resolver 打开输入流并复制
+            FileOutputStream = autoclass('java.io.FileOutputStream')
+
+            ins = content_resolver.openInputStream(uri)
+            if ins is None:
+                return None
+            fos = FileOutputStream(str(dst))
+            try:
+                buffer = bytearray(8192)
+                while True:
+                    n = ins.read(buffer)
+                    if n == -1:
+                        break
+                    fos.write(buffer, 0, n)
+            finally:
+                fos.close()
+                ins.close()
+
+            return str(dst)
+        except Exception as exc:
+            print('_copy_uri_to_temp failed:', exc)
+            return None
 
     def scan_downloads(self):
         candidates = [
