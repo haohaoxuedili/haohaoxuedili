@@ -13,7 +13,7 @@ package.domain = io.github.idoknow
 source.dir = .
 
 # (list) Source files to include (let empty to include all the files)
-source.include_exts = py,png,jpg,ttf,bin
+source.include_exts = py,png,jpg,ttf,bin,so
 
 # (str) Application versionning (method 1)
 version = 1.0.3

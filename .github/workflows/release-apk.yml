@@ -65,7 +65,7 @@ jobs:
             exit 1
           fi
 
-      - name: Install Android API 33 platform
+      - name: Install Android API 33 platform and build-tools
         shell: bash
         run: |
           export ANDROID_HOME="$HOME/.buildozer/android_sdk"
@@ -93,8 +93,7 @@ jobs:
             android-release-${{ runner.os }}-
 
       - name: Sync core module
-        run: |
-          cp ncm2mp3.py android/ncm2mp3.py
+        run: cp ncm2mp3.py android/ncm2mp3.py
 
       - name: Convert SVG icon to PNG
         run: |
@@ -121,33 +120,21 @@ jobs:
           chmod +x ffmpeg-*.bin
 
       - name: Decode release keystore
+        id: keystore
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > android/release-key.keystore
-          ls -lh android/release-key.keystore
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::未配置 KEYSTORE_BASE64 secret，跳过签名，仅产出 unsigned APK"
+            echo "have_keystore=false" >> $GITHUB_OUTPUT
+          else
+            echo "$KEYSTORE_BASE64" | base64 -d > android/release-key.keystore
+            ls -lh android/release-key.keystore
+            echo "have_keystore=true" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Configure release signing in buildozer.spec
-        shell: bash
-        env:
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          python3 - <<'PY'
-          import os
-          p = 'android/buildozer.spec'
-          s = open(p).read()
-          s = s.replace('__KEY_ALIAS__', os.environ['KEY_ALIAS'])
-          s = s.replace('__STOREPASS__', os.environ['KEYSTORE_PASSWORD'])
-          s = s.replace('__KEYPASS__', os.environ['KEY_PASSWORD'])
-          open(p, 'w').write(s)
-          PY
-          echo "--- buildozer.spec 签名配置 ---"
-          grep -E '^android\.keystore|^debug' android/buildozer.spec
-
-      - name: Build release APK
+      - name: Build release APK (unsigned)
         id: build
         working-directory: android
         continue-on-error: true
@@ -156,14 +143,27 @@ jobs:
           set +e
           export ANDROID_HOME="$HOME/.buildozer/android_sdk"
           export ANDROID_SDK_ROOT="$HOME/.buildozer/android_sdk"
+          # 注释掉 buildozer.spec 里的签名配置，生成 unsigned release APK
+          # 然后我们用自己的 apksigner 签名，避免 buildozer 签名环节失败导致无产物
+          sed -i 's/^android\.keystore\./#&/' buildozer.spec
+          echo "--- buildozer.spec 签名相关（应已注释） ---"
+          grep -nE 'keystore|debug' buildozer.spec || true
           yes | buildozer -v android release 2>&1 | tee buildozer-release.log
           ec=${PIPESTATUS[1]}
           echo "BUILD_EXIT_CODE=$ec" >> $GITHUB_ENV
           echo "buildozer exit code: $ec"
+          echo "--- bin 目录树 ---"
+          find bin -maxdepth 3 -type f 2>/dev/null | head -50 || echo "(bin 不存在或为空)"
+          echo "--- .buildozer/android/platform 下的 apk ---"
+          find .buildozer/android/platform -name "*.apk" -type f 2>/dev/null | head -20 || true
           rm -rf apk-output
           mkdir -p apk-output
-          find bin -maxdepth 2 -name "*.apk" -type f -print -exec cp {} apk-output/ \;
-          ls -lh apk-output/*.apk 2>/dev/null || true
+          # 从所有可能的位置收集 APK
+          find . -name "*-release*.apk" -o -name "*.apk" 2>/dev/null | while read f; do
+            echo "found apk: $f"
+            cp "$f" apk-output/
+          done
+          ls -lh apk-output/ 2>/dev/null || true
           exit 0
 
       - name: Dump buildozer release log tail
@@ -171,24 +171,59 @@ jobs:
         working-directory: android
         shell: bash
         run: |
-          echo "=============== buildozer-release.log (末尾 80 行) ==============="
-          tail -n 80 buildozer-release.log || echo "(无日志文件)"
+          echo "=============== buildozer-release.log (末尾 200 行) ==============="
+          tail -n 200 buildozer-release.log || echo "(无日志文件)"
           echo "=============== 错误上下文 ==============="
-          grep -nEi "error|failed|exception|not found|traceback|cannot|no such file" buildozer-release.log | tail -20 || true
+          grep -nEi "error|failed|exception|not found|traceback|cannot|no such file|warning" buildozer-release.log | tail -40 || true
           echo "=============== 结束 ==============="
 
-      - name: Verify release APK exists
+      - name: Sign APK with apksigner
+        if: success() && steps.keystore.outputs.have_keystore == 'true'
+        working-directory: android
+        shell: bash
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          BUILD_TOOLS="$HOME/.buildozer/android_sdk/build-tools/33.0.2"
+          if [ ! -d "$BUILD_TOOLS" ]; then
+            BUILD_TOOLS=$(ls -d $HOME/.buildozer/android_sdk/build-tools/*/ | tail -1)
+          fi
+          echo "apksigner located at: $BUILD_TOOLS/apksigner"
+          cd apk-output
+          for apk in *.apk; do
+            [ -e "$apk" ] || continue
+            echo "--- zipalign $apk ---"
+            "$BUILD_TOOLS/zipalign" -f -v 4 "$apk" "${apk%.apk}-aligned.apk" || cp "$apk" "${apk%.apk}-aligned.apk"
+            echo "--- apksigner sign $apk ---"
+            "$BUILD_TOOLS/apksigner" sign \
+              --ks ../release-key.keystore \
+              --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass "pass:$KEYSTORE_PASSWORD" \
+              --key-pass "pass:$KEY_PASSWORD" \
+              --out "${apk%.apk}-signed.apk" \
+              "${apk%.apk}-aligned.apk"
+            "$BUILD_TOOLS/apksigner" verify --verbose "${apk%.apk}-signed.apk" || true
+          done
+          # 仅保留签名后的 APK
+          rm -f *-aligned.apk
+          ls -lh
+
+      - name: Verify APK exists
         shell: bash
         run: |
           echo "BUILD_EXIT_CODE=${BUILD_EXIT_CODE}"
           if ls android/apk-output/*.apk >/dev/null 2>&1; then
-            echo "BUILD OK: release APK found"
+            echo "BUILD OK: APK found"
+            ls -lh android/apk-output/
           else
             echo "BUILD FAILED: no APK found, exit_code=${BUILD_EXIT_CODE}"
+            echo "请下载 buildozer-release-log artifact 查看完整构建日志。"
             exit 1
           fi
 
-      - name: Upload release APK artifact
+      - name: Upload APK artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -205,6 +240,16 @@ jobs:
           path: android/buildozer-release.log
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Rename APK for release
+        if: success()
+        working-directory: android/apk-output
+        shell: bash
+        run: |
+          # 找到最终签名的 APK，重命名为规范名称
+          APK=$(ls *-signed.apk 2>/dev/null | head -1 || ls *.apk | head -1)
+          mv "$APK" "ncm2mp3-${{ github.ref_name }}-release.apk" || true
+          ls -lh
 
       - name: Determine release tag
         id: tag
@@ -227,7 +272,16 @@ jobs:
           TAG="${{ steps.tag.outputs.tag }}"
           NOTES="${{ github.event.inputs.release_notes }}"
           if [ -z "$NOTES" ]; then
-            NOTES="Release ${TAG}"
+            NOTES="Release ${TAG}
+
+          NCM 转 MP3 / FLAC 安卓安装包。
+
+          ## 安装说明
+          1. 下载 APK 文件到手机
+          2. 允许\"来自未知来源\"的安装
+          3. 点击安装，首次安装需授予存储访问权限
+
+          支持架构：arm64-v8a, armeabi-v7a"
           fi
           cd android/apk-output
           gh release create "$TAG" \
