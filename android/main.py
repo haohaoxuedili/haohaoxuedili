@@ -188,8 +188,8 @@ class RootWidget(BoxLayout):
 
     def _register_activity_callback(self):
         try:
-            from android import activity
-            activity.bind(on_activity_result=self._on_activity_result)
+            from android.activity import bind
+            bind(on_activity_result=self._on_activity_result)
         except Exception as exc:
             print('bind activity callback failed:', exc)
 
@@ -222,6 +222,7 @@ class RootWidget(BoxLayout):
             intent.putExtra(Intent.EXTRA_MIME_TYPES, mime_types)
             intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, True)
             intent.putExtra(Intent.EXTRA_LOCAL_ONLY, True)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 
             activity.startActivityForResult(intent, _PICK_FILES_REQUEST)
             self._toast('请选择 .ncm 文件（可多选）')
@@ -229,18 +230,21 @@ class RootWidget(BoxLayout):
             self._toast('打开文件选择器失败: ' + str(exc)[:80])
 
     def _on_activity_result(self, request_code, result_code, intent):
+        self._toast(f'收到回调 request={request_code} result={result_code}')
         if request_code != _PICK_FILES_REQUEST:
             return
         if result_code != -1:  # Activity.RESULT_OK == -1
             self._toast('未选择文件')
             return
         if intent is None:
+            self._toast('回调 intent 为空')
             return
 
         try:
             uris = []
             clip_data = intent.getClipData()
             if clip_data:
+                self._toast(f'多选 {clip_data.getItemCount()} 个文件')
                 for i in range(clip_data.getItemCount()):
                     item = clip_data.getItemAt(i)
                     uris.append(item.getUri())
@@ -248,74 +252,92 @@ class RootWidget(BoxLayout):
                 data = intent.getData()
                 if data:
                     uris.append(data)
+                    self._toast('单选 1 个文件')
 
             if not uris:
                 self._toast('未获取到文件')
                 return
 
-            copied = []
-            for uri in uris:
-                local_path = self._copy_uri_to_temp(uri)
-                if local_path:
-                    copied.append(local_path)
-            if copied:
-                self._add_files(copied)
-            else:
-                self._toast('没有可转换的 .ncm 文件')
+            self._toast(f'开始复制 {len(uris)} 个文件...')
+            Thread(target=self._copy_uris_background, args=(uris,), daemon=True).start()
         except Exception as exc:
             self._toast('处理选择结果失败: ' + str(exc)[:80])
 
+    def _copy_uris_background(self, uris):
+        """后台线程复制 URI，避免阻塞 UI。"""
+        copied = []
+        errors = []
+        for uri in uris:
+            try:
+                local_path = self._copy_uri_to_temp(uri)
+                if local_path:
+                    copied.append(local_path)
+                else:
+                    errors.append('copy returned None')
+            except Exception as exc:
+                errors.append(str(exc)[:60])
+
+        def _finish(_dt):
+            if copied:
+                self._add_files(copied)
+            if errors:
+                self._toast(f'{len(errors)} 个文件复制失败: {errors[0]}')
+
+        Clock.schedule_once(_finish, 0)
+
     def _copy_uri_to_temp(self, uri):
         """把 content:// URI 复制到 App 私有缓存目录，返回本地路径。"""
-        try:
-            from jnius import autoclass
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            activity = PythonActivity.mActivity
-            ctx = activity.getApplicationContext()
-            content_resolver = ctx.getContentResolver()
+        from jnius import autoclass
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        activity = PythonActivity.mActivity
+        ctx = activity.getApplicationContext()
+        content_resolver = ctx.getContentResolver()
 
-            # 查询原始文件名
-            cursor = content_resolver.query(uri, None, None, None, None)
-            display_name = None
-            if cursor:
+        # 查询原始文件名
+        cursor = content_resolver.query(uri, None, None, None, None)
+        display_name = None
+        if cursor:
+            try:
                 if cursor.moveToFirst():
                     idx = cursor.getColumnIndex('_display_name')
                     if idx >= 0:
                         display_name = cursor.getString(idx)
+            finally:
                 cursor.close()
 
-            if not display_name:
-                import uuid
-                display_name = 'unknown_' + uuid.uuid4().hex[:8] + '.ncm'
-            if not display_name.lower().endswith('.ncm'):
-                display_name += '.ncm'
+        if not display_name:
+            import uuid
+            display_name = 'unknown_' + uuid.uuid4().hex[:8] + '.ncm'
+        if not display_name.lower().endswith('.ncm'):
+            display_name += '.ncm'
 
-            cache_dir = Path(ctx.getCacheDir().getAbsolutePath()) / 'picked_ncm'
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            dst = cache_dir / display_name
+        cache_dir = Path(ctx.getCacheDir().getAbsolutePath()) / 'picked_ncm'
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        dst = cache_dir / display_name
 
-            # 通过 content resolver 打开输入流并复制
-            FileOutputStream = autoclass('java.io.FileOutputStream')
+        # 通过 content resolver 打开输入流并复制
+        FileOutputStream = autoclass('java.io.FileOutputStream')
 
-            ins = content_resolver.openInputStream(uri)
-            if ins is None:
-                return None
+        ins = content_resolver.openInputStream(uri)
+        if ins is None:
+            raise RuntimeError('openInputStream returned None')
+        try:
             fos = FileOutputStream(str(dst))
             try:
                 buffer = bytearray(8192)
+                total = 0
                 while True:
                     n = ins.read(buffer)
                     if n == -1:
                         break
                     fos.write(buffer, 0, n)
+                    total += n
             finally:
                 fos.close()
-                ins.close()
+        finally:
+            ins.close()
 
-            return str(dst)
-        except Exception as exc:
-            print('_copy_uri_to_temp failed:', exc)
-            return None
+        return str(dst)
 
     def scan_downloads(self):
         candidates = [
