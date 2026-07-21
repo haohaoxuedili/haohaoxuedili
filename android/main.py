@@ -226,12 +226,7 @@ class RootWidget(BoxLayout):
             self.ids.ffmpeg_lbl.text = '核心模块异常: ' + repr(exc)
 
     def _convert_folder_candidates(self):
-        candidates = [
-            Path('/sdcard/NCM转换'),
-            Path('/storage/emulated/0/NCM转换'),
-            Path('/sdcard/Download/NCM转换'),
-            Path('/storage/emulated/0/Download/NCM转换'),
-        ]
+        candidates = []
         try:
             from jnius import autoclass
             PythonActivity = autoclass('org.kivy.android.PythonActivity')
@@ -242,6 +237,12 @@ class RootWidget(BoxLayout):
                     candidates.append(Path(ext_dir.getAbsolutePath()) / 'NCM转换')
         except Exception as exc:
             print('get external files dir failed:', exc)
+        candidates.extend([
+            Path('/sdcard/Download/NCM转换'),
+            Path('/storage/emulated/0/Download/NCM转换'),
+            Path('/sdcard/NCM转换'),
+            Path('/storage/emulated/0/NCM转换'),
+        ])
         return candidates
 
     def _convert_folder(self):

@@ -32,13 +32,13 @@ requirements = python3,kivy,pycryptodome,mutagen,android
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,READ_MEDIA_AUDIO,MANAGE_EXTERNAL_STORAGE
 
 # (int) Target Android API
-android.api = 29
+android.api = 33
 
 # (int) Minimum API required
 android.minapi = 24
 
 # (int) Android SDK version to use
-android.sdk = 29
+android.sdk = 33
 
 # (str) Android NDK version to use
 android.ndk = 25b
@@ -49,9 +49,6 @@ android.archs = arm64-v8a, armeabi-v7a
 # (list) Android additional libraries to copy into lib/<abi>
 android.add_libs_arm64_v8a = libs/arm64-v8a/libffmpeg.so
 android.add_libs_armeabi_v7a = libs/armeabi-v7a/libffmpeg.so
-
-# 允许 Android 10 使用传统外部存储访问，避免公共目录无法扫描
-android.manifest_application_arguments = android:requestLegacyExternalStorage="true"
 
 # (bool) Indicate if the application should be compiled in debug mode
 debug = 0
