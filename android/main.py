@@ -167,6 +167,7 @@ class RootWidget(BoxLayout):
         super().__init__(**kwargs)
         self._files = []
         self._converting = False
+        self._convert_folder_path = None
         Clock.schedule_once(lambda _dt: self.check_core(), 0.5)
         Clock.schedule_once(lambda _dt: self.prepare_convert_folder(show_toast=False), 0.8)
 
@@ -216,6 +217,7 @@ class RootWidget(BoxLayout):
     def prepare_convert_folder(self, show_toast=True):
         folder = self._convert_folder()
         if folder.exists():
+            self._convert_folder_path = folder
             self.ids.folder_lbl.text = (
                 '请将 .ncm 文件放入下面这个文件夹，然后点击“扫描转换文件夹”。\n路径: ' + str(folder)
             )
@@ -227,8 +229,11 @@ class RootWidget(BoxLayout):
                 self._toast('创建文件夹失败，请检查存储权限')
 
     def scan_convert_folder(self):
-        folder = self._convert_folder()
-        if not folder.exists():
+        folder = self._convert_folder_path
+        if folder is None or not folder.exists():
+            self.prepare_convert_folder(show_toast=False)
+            folder = self._convert_folder_path
+        if folder is None or not folder.exists():
             self._toast('转换文件夹不存在，请先点击“创建/查看文件夹”')
             return
         self._add_path(str(folder))
@@ -247,8 +252,17 @@ class RootWidget(BoxLayout):
             self._toast('路径不存在或不是 .ncm 文件')
             return
         if not found:
-            self._toast('转换文件夹里没有找到 .ncm 文件')
+            preview = ''
+            if p.is_dir():
+                try:
+                    names = os.listdir(str(p))[:5]
+                    if names:
+                        preview = '，当前看到: ' + ', '.join(names)[:60]
+                except Exception:
+                    pass
+            self._toast('没有找到 .ncm 文件，请确认放入: ' + str(p) + preview)
             return
+        self._toast(f'找到 {len(found)} 个 .ncm 文件')
         self._add_files(found)
 
     def _add_files(self, files):
