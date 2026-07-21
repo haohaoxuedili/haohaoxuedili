@@ -26,7 +26,7 @@ icon.filename = app.png
 # pycryptodome: AES decrypt of ncm metadata/key
 # mutagen: write audio metadata
 # Android 版先不使用 numpy，避免 python-for-android 编译 numpy 失败
-requirements = python3,kivy,pycryptodome,mutagen,android
+requirements = python3,kivy,pycryptodome,mutagen,android,plyer
 
 # (list) Application permissions
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE

@@ -202,32 +202,59 @@ class RootWidget(BoxLayout):
         self.ids.path_input.text = ''
 
     def pick_files(self):
-        """调用 Android 原生文件选择器（支持多选 .ncm）。"""
+        """调用文件选择器（支持多选 .ncm）。"""
         try:
-            from jnius import autoclass
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            Intent = autoclass('android.content.Intent')
-
-            activity = PythonActivity.mActivity
-            if activity is None:
-                self._toast('无法获取 Activity')
-                return
-            self._activity = activity
-
-            intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-            intent.addCategory(Intent.CATEGORY_OPENABLE)
-            intent.setType('*/*')
-            # 仅允许选择 .ncm 文件
-            mime_types = ['audio/*', 'application/octet-stream']
-            intent.putExtra(Intent.EXTRA_MIME_TYPES, mime_types)
-            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, True)
-            intent.putExtra(Intent.EXTRA_LOCAL_ONLY, True)
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-
-            activity.startActivityForResult(intent, _PICK_FILES_REQUEST)
+            from plyer import filechooser
+            filechooser.open_file(
+                title='选择 NCM 文件',
+                multiple=True,
+                filters=[('NCM 文件', '*.ncm')],
+                on_selection=self._on_plyer_selection,
+            )
             self._toast('请选择 .ncm 文件（可多选）')
         except Exception as exc:
-            self._toast('打开文件选择器失败: ' + str(exc)[:80])
+            self._toast('文件选择器启动失败: ' + str(exc)[:80])
+
+    def _on_plyer_selection(self, selection):
+        """处理 plyer 文件选择结果。"""
+        try:
+            if not selection:
+                Clock.schedule_once(lambda _dt: self._toast('未选择文件'), 0)
+                return
+
+            paths = []
+            uris = []
+            for item in selection:
+                value = str(item)
+                if value.startswith('content://'):
+                    uris.append(value)
+                else:
+                    paths.append(value)
+
+            if paths:
+                Clock.schedule_once(lambda _dt: self._add_selected_paths(paths), 0)
+            if uris:
+                Thread(target=self._copy_uris_background, args=(uris,), daemon=True).start()
+            if not paths and not uris:
+                Clock.schedule_once(lambda _dt: self._toast('未获取到文件路径'), 0)
+        except Exception as exc:
+            Clock.schedule_once(lambda _dt: self._toast('选择结果处理失败: ' + str(exc)[:80]), 0)
+
+    def _add_selected_paths(self, paths):
+        """添加文件选择器返回的本地路径。"""
+        from urllib.parse import unquote, urlparse
+        normalized = []
+        for value in paths:
+            value = str(value)
+            if value.startswith('file://'):
+                parsed = urlparse(value)
+                value = unquote(parsed.path)
+            if value.lower().endswith('.ncm'):
+                normalized.append(value)
+        if normalized:
+            self._add_files(normalized)
+        else:
+            self._toast('没有选择 .ncm 文件')
 
     def _on_activity_result(self, request_code, result_code, intent):
         self._toast(f'收到回调 request={request_code} result={result_code}')
@@ -292,6 +319,9 @@ class RootWidget(BoxLayout):
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
         OpenableColumns = autoclass('android.provider.OpenableColumns')
         FileOutputStream = autoclass('java.io.FileOutputStream')
+        Uri = autoclass('android.net.Uri')
+        if isinstance(uri, str):
+            uri = Uri.parse(uri)
 
         activity = PythonActivity.mActivity
         ctx = activity.getApplicationContext()
