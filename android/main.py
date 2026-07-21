@@ -168,12 +168,52 @@ class RootWidget(BoxLayout):
         self._files = []
         self._converting = False
         self._convert_folder_path = None
+        Clock.schedule_once(lambda _dt: self.request_storage_permissions(), 0.2)
         Clock.schedule_once(lambda _dt: self.check_core(), 0.5)
         Clock.schedule_once(lambda _dt: self.prepare_convert_folder(show_toast=False), 0.8)
 
     def _load_core(self):
         import ncm2mp3
         return ncm2mp3
+
+    def request_storage_permissions(self):
+        try:
+            from android.permissions import request_permissions, Permission
+            perms = [
+                Permission.READ_EXTERNAL_STORAGE,
+                Permission.WRITE_EXTERNAL_STORAGE,
+            ]
+            if hasattr(Permission, 'READ_MEDIA_AUDIO'):
+                perms.append(Permission.READ_MEDIA_AUDIO)
+            request_permissions(perms)
+        except Exception as exc:
+            print('request storage permissions failed:', exc)
+        self._request_manage_all_files_permission()
+
+    def _request_manage_all_files_permission(self):
+        try:
+            from jnius import autoclass
+            Build = autoclass('android.os.Build')
+            if Build.VERSION.SDK_INT < 30:
+                return
+
+            Environment = autoclass('android.os.Environment')
+            if Environment.isExternalStorageManager():
+                return
+
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Intent = autoclass('android.content.Intent')
+            Settings = autoclass('android.provider.Settings')
+            Uri = autoclass('android.net.Uri')
+
+            activity = PythonActivity.mActivity
+            package_name = activity.getPackageName()
+            intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+            intent.setData(Uri.parse('package:' + package_name))
+            activity.startActivity(intent)
+            self._toast('请开启“允许管理所有文件”，返回后再扫描')
+        except Exception as exc:
+            print('request manage all files failed:', exc)
 
     def check_core(self):
         try:
