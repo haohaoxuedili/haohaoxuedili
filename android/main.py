@@ -184,30 +184,52 @@ class RootWidget(BoxLayout):
         except Exception as exc:
             self.ids.ffmpeg_lbl.text = '核心模块异常: ' + repr(exc)
 
+    def _convert_folder_candidates(self):
+        candidates = [
+            Path('/sdcard/NCM转换'),
+            Path('/storage/emulated/0/NCM转换'),
+            Path('/sdcard/Download/NCM转换'),
+            Path('/storage/emulated/0/Download/NCM转换'),
+        ]
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            activity = PythonActivity.mActivity
+            if activity is not None:
+                ext_dir = activity.getExternalFilesDir(None)
+                if ext_dir is not None:
+                    candidates.append(Path(ext_dir.getAbsolutePath()) / 'NCM转换')
+        except Exception as exc:
+            print('get external files dir failed:', exc)
+        return candidates
+
     def _convert_folder(self):
-        return Path('/sdcard/NCM转换')
+        for folder in self._convert_folder_candidates():
+            try:
+                if folder.exists() or folder.mkdir(parents=True, exist_ok=True) is None:
+                    if folder.exists():
+                        return folder
+            except Exception:
+                continue
+        return Path('/sdcard/Download/NCM转换')
 
     def prepare_convert_folder(self, show_toast=True):
         folder = self._convert_folder()
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
+        if folder.exists():
             self.ids.folder_lbl.text = (
-                '请将 .ncm 文件放入手机主目录的 NCM转换 文件夹，'
-                '然后点击“扫描转换文件夹”。\n路径: ' + str(folder)
+                '请将 .ncm 文件放入下面这个文件夹，然后点击“扫描转换文件夹”。\n路径: ' + str(folder)
             )
             if show_toast:
                 self._toast('转换文件夹已准备好: ' + str(folder))
-        except Exception as exc:
-            self.ids.folder_lbl.text = '创建转换文件夹失败，请手动创建: /sdcard/NCM转换'
+        else:
+            self.ids.folder_lbl.text = '创建转换文件夹失败，请手动创建: /sdcard/Download/NCM转换'
             if show_toast:
-                self._toast('创建文件夹失败: ' + str(exc)[:80])
+                self._toast('创建文件夹失败，请检查存储权限')
 
     def scan_convert_folder(self):
         folder = self._convert_folder()
         if not folder.exists():
-            self.prepare_convert_folder(show_toast=False)
-        if not folder.exists():
-            self._toast('请先手动创建 /sdcard/NCM转换 并放入 .ncm 文件')
+            self._toast('转换文件夹不存在，请先点击“创建/查看文件夹”')
             return
         self._add_path(str(folder))
 
