@@ -13,10 +13,6 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
-from kivy.uix.textinput import TextInput
-
-# Android 文件选择器回调标识
-_PICK_FILES_REQUEST = 42
 
 # Android 上 Kivy 默认字体不支持中文，注册内置中文字体
 _BUNDLED_FONT = os.path.join(os.path.dirname(__file__), 'DroidSansFallback.ttf')
@@ -90,26 +86,29 @@ KV = """
                 font_name: ZH_FONT
                 group: 'fmt'
 
-    TextInput:
-        id: path_input
-        hint_text: '输入或粘贴 .ncm 文件/文件夹路径（或点击下方选择文件）'
+    Label:
+        id: folder_lbl
+        text: '请将 .ncm 文件放入手机主目录的 NCM转换 文件夹，然后点击扫描。'
         font_name: ZH_FONT
-        multiline: False
+        color: TEXT_COLOR
+        font_size: dp(12)
         size_hint_y: None
-        height: dp(48)
+        height: dp(58)
+        halign: 'left'
+        text_size: self.size
 
     BoxLayout:
         size_hint_y: None
         height: dp(52)
         spacing: dp(8)
         Button:
-            text: '选择文件'
+            text: '创建/查看文件夹'
             font_name: ZH_FONT
-            on_press: root.pick_files()
+            on_press: root.prepare_convert_folder()
         Button:
-            text: '扫描下载目录'
+            text: '扫描转换文件夹'
             font_name: ZH_FONT
-            on_press: root.scan_downloads()
+            on_press: root.scan_convert_folder()
 
     ScrollView:
         BoxLayout:
@@ -168,9 +167,8 @@ class RootWidget(BoxLayout):
         super().__init__(**kwargs)
         self._files = []
         self._converting = False
-        self._activity = None
-        self._register_activity_callback()
         Clock.schedule_once(lambda _dt: self.check_core(), 0.5)
+        Clock.schedule_once(lambda _dt: self.prepare_convert_folder(show_toast=False), 0.8)
 
     def _load_core(self):
         import ncm2mp3
@@ -186,205 +184,32 @@ class RootWidget(BoxLayout):
         except Exception as exc:
             self.ids.ffmpeg_lbl.text = '核心模块异常: ' + repr(exc)
 
-    def _register_activity_callback(self):
-        try:
-            from android.activity import bind
-            bind(on_activity_result=self._on_activity_result)
-        except Exception as exc:
-            print('bind activity callback failed:', exc)
+    def _convert_folder(self):
+        return Path('/sdcard/NCM转换')
 
-    def add_input_path(self):
-        value = self.ids.path_input.text.strip().strip('"')
-        if not value:
-            self._toast('请先输入路径')
-            return
-        self._add_path(value)
-        self.ids.path_input.text = ''
-
-    def pick_files(self):
-        """调用文件选择器（支持多选 .ncm）。"""
+    def prepare_convert_folder(self, show_toast=True):
+        folder = self._convert_folder()
         try:
-            from plyer import filechooser
-            filechooser.open_file(
-                title='选择 NCM 文件',
-                multiple=True,
-                filters=[('NCM 文件', '*.ncm')],
-                on_selection=self._on_plyer_selection,
+            folder.mkdir(parents=True, exist_ok=True)
+            self.ids.folder_lbl.text = (
+                '请将 .ncm 文件放入手机主目录的 NCM转换 文件夹，'
+                '然后点击“扫描转换文件夹”。\n路径: ' + str(folder)
             )
-            self._toast('请选择 .ncm 文件（可多选）')
+            if show_toast:
+                self._toast('转换文件夹已准备好: ' + str(folder))
         except Exception as exc:
-            self._toast('文件选择器启动失败: ' + str(exc)[:80])
+            self.ids.folder_lbl.text = '创建转换文件夹失败，请手动创建: /sdcard/NCM转换'
+            if show_toast:
+                self._toast('创建文件夹失败: ' + str(exc)[:80])
 
-    def _on_plyer_selection(self, selection):
-        """处理 plyer 文件选择结果。"""
-        try:
-            if not selection:
-                Clock.schedule_once(lambda _dt: self._toast('未选择文件'), 0)
-                return
-
-            paths = []
-            uris = []
-            for item in selection:
-                value = str(item)
-                if value.startswith('content://'):
-                    uris.append(value)
-                else:
-                    paths.append(value)
-
-            if paths:
-                Clock.schedule_once(lambda _dt: self._add_selected_paths(paths), 0)
-            if uris:
-                Thread(target=self._copy_uris_background, args=(uris,), daemon=True).start()
-            if not paths and not uris:
-                Clock.schedule_once(lambda _dt: self._toast('未获取到文件路径'), 0)
-        except Exception as exc:
-            Clock.schedule_once(lambda _dt: self._toast('选择结果处理失败: ' + str(exc)[:80]), 0)
-
-    def _add_selected_paths(self, paths):
-        """添加文件选择器返回的本地路径。"""
-        from urllib.parse import unquote, urlparse
-        normalized = []
-        for value in paths:
-            value = str(value)
-            if value.startswith('file://'):
-                parsed = urlparse(value)
-                value = unquote(parsed.path)
-            if value.lower().endswith('.ncm'):
-                normalized.append(value)
-        if normalized:
-            self._add_files(normalized)
-        else:
-            self._toast('没有选择 .ncm 文件')
-
-    def _on_activity_result(self, request_code, result_code, intent):
-        self._toast(f'收到回调 request={request_code} result={result_code}')
-        if request_code != _PICK_FILES_REQUEST:
+    def scan_convert_folder(self):
+        folder = self._convert_folder()
+        if not folder.exists():
+            self.prepare_convert_folder(show_toast=False)
+        if not folder.exists():
+            self._toast('请先手动创建 /sdcard/NCM转换 并放入 .ncm 文件')
             return
-        if result_code != -1:  # Activity.RESULT_OK == -1
-            self._toast('未选择文件')
-            return
-        if intent is None:
-            self._toast('回调 intent 为空')
-            return
-
-        try:
-            uris = []
-            clip_data = intent.getClipData()
-            if clip_data:
-                self._toast(f'多选 {clip_data.getItemCount()} 个文件')
-                for i in range(clip_data.getItemCount()):
-                    item = clip_data.getItemAt(i)
-                    uris.append(item.getUri())
-            else:
-                data = intent.getData()
-                if data:
-                    uris.append(data)
-                    self._toast('单选 1 个文件')
-
-            if not uris:
-                self._toast('未获取到文件')
-                return
-
-            self._toast(f'开始复制 {len(uris)} 个文件...')
-            Thread(target=self._copy_uris_background, args=(uris,), daemon=True).start()
-        except Exception as exc:
-            self._toast('处理选择结果失败: ' + str(exc)[:80])
-
-    def _copy_uris_background(self, uris):
-        """后台线程复制 URI，避免阻塞 UI。"""
-        copied = []
-        errors = []
-        for uri in uris:
-            try:
-                local_path = self._copy_uri_to_temp(uri)
-                if local_path:
-                    copied.append(local_path)
-                else:
-                    errors.append('copy returned None')
-            except Exception as exc:
-                errors.append(str(exc)[:60])
-
-        def _finish(_dt):
-            if copied:
-                self._add_files(copied)
-            if errors:
-                self._toast(f'{len(errors)} 个文件复制失败: {errors[0]}')
-
-        Clock.schedule_once(_finish, 0)
-
-    def _copy_uri_to_temp(self, uri):
-        """把 content:// URI 复制到 App 私有缓存目录，返回本地路径。"""
-        from jnius import autoclass, jarray
-
-        PythonActivity = autoclass('org.kivy.android.PythonActivity')
-        OpenableColumns = autoclass('android.provider.OpenableColumns')
-        FileOutputStream = autoclass('java.io.FileOutputStream')
-        Uri = autoclass('android.net.Uri')
-        if isinstance(uri, str):
-            uri = Uri.parse(uri)
-
-        activity = PythonActivity.mActivity
-        ctx = activity.getApplicationContext()
-        content_resolver = ctx.getContentResolver()
-
-        # 查询原始文件名
-        cursor = content_resolver.query(uri, None, None, None, None)
-        display_name = None
-        if cursor:
-            try:
-                if cursor.moveToFirst():
-                    idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if idx >= 0:
-                        display_name = cursor.getString(idx)
-            finally:
-                cursor.close()
-
-        if not display_name:
-            import uuid
-            display_name = 'unknown_' + uuid.uuid4().hex[:8] + '.ncm'
-        if not display_name.lower().endswith('.ncm'):
-            display_name += '.ncm'
-
-        cache_dir = Path(ctx.getCacheDir().getAbsolutePath()) / 'picked_ncm'
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        dst = cache_dir / display_name
-
-        ins = content_resolver.openInputStream(uri)
-        if ins is None:
-            raise RuntimeError('无法打开所选文件')
-
-        total = 0
-        try:
-            fos = FileOutputStream(str(dst))
-            try:
-                buffer = jarray('b')([0] * 8192)
-                while True:
-                    n = ins.read(buffer, 0, 8192)
-                    if n <= 0:
-                        break
-                    fos.write(buffer, 0, n)
-                    total += n
-            finally:
-                fos.close()
-        finally:
-            ins.close()
-
-        if total <= 0:
-            raise RuntimeError('复制后文件为空')
-        return str(dst)
-
-    def scan_downloads(self):
-        candidates = [
-            '/sdcard/Android/data/io.github.idoknow.ncm2mp3/files',
-            '/sdcard/Download',
-            '/sdcard/Music',
-            '/storage/emulated/0/Download',
-        ]
-        for folder in candidates:
-            if os.path.isdir(folder):
-                self._add_path(folder)
-                return
-        self._toast('没有找到下载目录')
+        self._add_path(str(folder))
 
     def _add_path(self, value):
         p = Path(value)
@@ -398,6 +223,9 @@ class RootWidget(BoxLayout):
                         found.append(os.path.join(root, name))
         else:
             self._toast('路径不存在或不是 .ncm 文件')
+            return
+        if not found:
+            self._toast('转换文件夹里没有找到 .ncm 文件')
             return
         self._add_files(found)
 
