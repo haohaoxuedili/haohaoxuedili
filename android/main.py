@@ -287,8 +287,12 @@ class RootWidget(BoxLayout):
 
     def _copy_uri_to_temp(self, uri):
         """把 content:// URI 复制到 App 私有缓存目录，返回本地路径。"""
-        from jnius import autoclass
+        from jnius import autoclass, jarray
+
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        OpenableColumns = autoclass('android.provider.OpenableColumns')
+        FileOutputStream = autoclass('java.io.FileOutputStream')
+
         activity = PythonActivity.mActivity
         ctx = activity.getApplicationContext()
         content_resolver = ctx.getContentResolver()
@@ -299,7 +303,7 @@ class RootWidget(BoxLayout):
         if cursor:
             try:
                 if cursor.moveToFirst():
-                    idx = cursor.getColumnIndex('_display_name')
+                    idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                     if idx >= 0:
                         display_name = cursor.getString(idx)
             finally:
@@ -315,20 +319,18 @@ class RootWidget(BoxLayout):
         cache_dir.mkdir(parents=True, exist_ok=True)
         dst = cache_dir / display_name
 
-        # 通过 content resolver 打开输入流并复制
-        FileOutputStream = autoclass('java.io.FileOutputStream')
-
         ins = content_resolver.openInputStream(uri)
         if ins is None:
-            raise RuntimeError('openInputStream returned None')
+            raise RuntimeError('无法打开所选文件')
+
+        total = 0
         try:
             fos = FileOutputStream(str(dst))
             try:
-                buffer = bytearray(8192)
-                total = 0
+                buffer = jarray('b')([0] * 8192)
                 while True:
-                    n = ins.read(buffer)
-                    if n == -1:
+                    n = ins.read(buffer, 0, 8192)
+                    if n <= 0:
                         break
                     fos.write(buffer, 0, n)
                     total += n
@@ -337,6 +339,8 @@ class RootWidget(BoxLayout):
         finally:
             ins.close()
 
+        if total <= 0:
+            raise RuntimeError('复制后文件为空')
         return str(dst)
 
     def scan_downloads(self):
