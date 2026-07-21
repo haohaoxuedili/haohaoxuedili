@@ -281,13 +281,14 @@ class RootWidget(BoxLayout):
     def _add_path(self, value):
         p = Path(value)
         found = []
-        if p.is_file() and p.suffix.lower() == '.ncm':
+        if p.is_file() and self._is_ncm_file(p):
             found.append(str(p))
         elif p.is_dir():
             for root, _dirs, names in os.walk(str(p)):
                 for name in names:
-                    if name.lower().endswith('.ncm'):
-                        found.append(os.path.join(root, name))
+                    file_path = Path(root) / name
+                    if self._is_ncm_file(file_path):
+                        found.append(str(file_path))
         else:
             self._toast('路径不存在或不是 .ncm 文件')
             return
@@ -304,6 +305,15 @@ class RootWidget(BoxLayout):
             return
         self._toast(f'找到 {len(found)} 个 .ncm 文件')
         self._add_files(found)
+
+    def _is_ncm_file(self, path):
+        try:
+            if not Path(path).is_file():
+                return False
+            with open(path, 'rb') as f:
+                return f.read(8) == b'CTENFDAM'
+        except Exception:
+            return False
 
     def _add_files(self, files):
         added = 0
