@@ -65,7 +65,7 @@ jobs:
             exit 1
           fi
 
-      - name: Install Android API 33 platform and build-tools
+      - name: Install Android API 29/33 platform and build-tools
         shell: bash
         run: |
           export ANDROID_HOME="$HOME/.buildozer/android_sdk"
@@ -75,7 +75,7 @@ jobs:
             CMDTOOLS="$ANDROID_SDK_ROOT/cmdline-tools/16.0/bin"
           fi
           yes | "$CMDTOOLS/sdkmanager" --licenses >/dev/null 2>&1 || true
-          "$CMDTOOLS/sdkmanager" "platforms;android-33" "build-tools;33.0.2" "platform-tools"
+          "$CMDTOOLS/sdkmanager" "platforms;android-29" "platforms;android-33" "build-tools;33.0.2" "platform-tools"
 
       - name: Cache Android SDK / NDK / p4a / build outputs
         uses: actions/cache@v4
